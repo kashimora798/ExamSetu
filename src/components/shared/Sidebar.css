@@ -1,0 +1,128 @@
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-4);
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.sidebar-logo-icon {
+  font-size: 1.5rem;
+}
+
+.sidebar-brand-name {
+  display: block;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.sidebar-brand-sub {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Nav links */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--ink2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.sidebar-link:hover {
+  background: var(--surface2);
+  color: var(--ink);
+}
+
+.sidebar-link-active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.sidebar-link-active:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.sidebar-pro-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  background: var(--gold-light);
+  border-radius: var(--radius-full);
+  letter-spacing: 0.05em;
+}
+
+/* Upgrade card */
+.sidebar-upgrade {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--gold-light);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(201, 125, 42, 0.2);
+  color: var(--gold);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.sidebar-upgrade:hover {
+  background: rgba(201, 125, 42, 0.15);
+}
+
+.sidebar-upgrade span:first-of-type {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.sidebar-upgrade-price {
+  display: block;
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+/* Mobile: hide sidebar */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+}

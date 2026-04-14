@@ -1,0 +1,214 @@
+/* ── Pricing Page ── */
+.pricing-page {
+  padding-bottom: var(--space-16);
+}
+
+.pricing-hero {
+  text-align: center;
+  padding-bottom: var(--space-10);
+}
+
+.pricing-hero h1 {
+  margin-bottom: var(--space-3);
+}
+
+.pricing-hero p {
+  font-size: var(--text-lg);
+  color: var(--muted);
+}
+
+/* Cards */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.pricing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  position: relative;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.pricing-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+
+.pricing-card-pro {
+  border-color: var(--gold);
+  border-width: 2px;
+}
+
+.pricing-popular {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-4);
+  background: var(--gold);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.pricing-best-value {
+  padding: var(--space-2) var(--space-3);
+  background: var(--success-light);
+  color: var(--success);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.pricing-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pricing-plan-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pricing-price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.pricing-amount {
+  font-size: var(--text-4xl);
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.pricing-period {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.pricing-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.pricing-feature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.pricing-feature.yes svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.pricing-feature.no {
+  opacity: 0.4;
+}
+
+.pricing-feature.no svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.pricing-feature.no span {
+  text-decoration: line-through;
+}
+
+/* FAQ */
+.faq-title {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.faq-list {
+  max-width: 700px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.faq-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.faq-item:hover {
+  border-color: var(--primary);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-5) var(--space-6);
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--text-base);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.faq-chevron {
+  transition: transform 0.3s var(--ease-out);
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.faq-open .faq-chevron {
+  transform: rotate(180deg);
+}
+
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s var(--ease-out);
+}
+
+.faq-open .faq-answer {
+  max-height: 300px;
+}
+
+.faq-answer p {
+  padding: 0 var(--space-6) var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+  }
+}

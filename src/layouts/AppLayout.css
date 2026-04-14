@@ -1,0 +1,21 @@
+/* ── App Layout ── */
+.app-layout {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.app-main {
+  margin-left: 260px;
+  min-height: 100vh;
+  padding: var(--space-8);
+  padding-bottom: var(--space-16);
+}
+
+/* Mobile: remove sidebar margin, add bottom-nav padding */
+@media (max-width: 768px) {
+  .app-main {
+    margin-left: 0;
+    padding: var(--space-4);
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+}

@@ -1,0 +1,29 @@
+<style>
+.audit-table{width:100%;border-collapse:collapse;font-size:13px}
+.audit-table th{text-align:left;padding:8px 12px;font-weight:500;font-size:11px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-secondary)}
+.audit-table td{padding:9px 12px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top}
+.audit-table tr:last-child td{border-bottom:none}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;font-family:var(--font-mono)}
+.yes{background:#EAF3DE;color:#3B6D11}
+.partial{background:#FAEEDA;color:#854F0B}
+.no{background:#FCEBEB;color:#A32D2D}
+.feat{font-weight:500;color:var(--color-text-primary)}
+.note{color:var(--color-text-secondary);font-size:12px;margin-top:3px}
+</style>
+<table class="audit-table">
+<thead><tr><th style="width:34%">Feature you designed for</th><th style="width:16%">Current DB</th><th style="width:50%">Gap / what's missing</th></tr></thead>
+<tbody>
+<tr><td><span class="feat">Basic analytics — accuracy, attempts</span><div class="note">user_subject_stats, user_topic_stats tables</div></td><td><span class="pill yes">Yes</span></td><td style="color:var(--color-text-secondary);font-size:12px">Fully supported. Tables exist. Needs nightly cron to recompute.</td></tr>
+<tr><td><span class="feat">Streak tracking</span><div class="note">user_streaks table with badges</div></td><td><span class="pill yes">Yes</span></td><td style="color:var(--color-text-secondary);font-size:12px">Fully supported. Update last_activity on each session completion.</td></tr>
+<tr><td><span class="feat">Weak topic detection</span><div class="note">user_topic_stats.accuracy_pct</div></td><td><span class="pill yes">Yes</span></td><td style="color:var(--color-text-secondary);font-size:12px">Fully supported. Sort by accuracy_pct ascending = weak topics.</td></tr>
+<tr><td><span class="feat">Topic frequency heatmap</span><div class="note">topic_frequency materialized view</div></td><td><span class="pill yes">Yes</span></td><td style="color:var(--color-text-secondary);font-size:12px">Fully supported. Requires REFRESH MATERIALIZED VIEW on cron.</td></tr>
+<tr><td><span class="feat">AI explanations in Hindi</span><div class="note">explanation_jobs queue + Claude API</div></td><td><span class="pill partial">Partial</span></td><td style="color:var(--color-text-secondary);font-size:12px">Table exists, Edge Function NOT built yet. Needs Supabase Edge Fn calling Claude API. Cost control needed.</td></tr>
+<tr><td><span class="feat">AI question recommendations</span><div class="note">"Next question for you" feature</div></td><td><span class="pill no">No</span></td><td style="color:var(--color-text-secondary);font-size:12px">Zero support. No recommendation engine. Needs spaced repetition logic (SM-2 algo) or Claude API call with user profile context.</td></tr>
+<tr><td><span class="feat">Percentile vs other users</span><div class="note">"Better than 64% of users"</div></td><td><span class="pill partial">Partial</span></td><td style="color:var(--color-text-secondary);font-size:12px">practice_sessions.percentile field exists but nothing computes it. Needs nightly aggregation query or window function.</td></tr>
+<tr><td><span class="feat">Test session resume</span><div class="note">Mid-test tab close → resume</div></td><td><span class="pill yes">Yes</span></td><td style="color:var(--color-text-secondary);font-size:12px">Fully supported by practice_sessions + question_attempts tables. Frontend Zustand + sessionStorage handles it.</td></tr>
+<tr><td><span class="feat">Institute student benchmarking</span><div class="note">"Your students vs state avg"</div></td><td><span class="pill no">No</span></td><td style="color:var(--color-text-secondary);font-size:12px">No cross-institute aggregation exists. Needs a platform-wide stats table updated by scheduled function.</td></tr>
+<tr><td><span class="feat">Diagnostic test on signup</span><div class="note">Auto-detect weak areas on Day 1</div></td><td><span class="pill no">No</span></td><td style="color:var(--color-text-secondary);font-size:12px">No onboarding quiz logic. Needs a curated 30-question diagnostic set + scoring logic to bootstrap user profile.</td></tr>
+<tr><td><span class="feat">Spaced repetition / smart review</span><div class="note">"Review these 8 questions tomorrow"</div></td><td><span class="pill no">No</span></td><td style="color:var(--color-text-secondary);font-size:12px">No SRS tables. Needs next_review_date + ease_factor columns on question_attempts or a separate srs_cards table.</td></tr>
+<tr><td><span class="feat">Real-time leaderboard</span><div class="note">Live rank during mock test</div></td><td><span class="pill partial">Partial</span></td><td style="color:var(--color-text-secondary);font-size:12px">Supabase Realtime exists. No leaderboard table or subscription logic yet. Feature flag exists but disabled.</td></tr>
+</tbody>
+</table>

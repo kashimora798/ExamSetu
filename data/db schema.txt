@@ -1,0 +1,1222 @@
+-- =============================================================================
+--  UPTET QUESTION BANK PLATFORM — COMPLETE DATABASE SCHEMA
+--  PostgreSQL 15+  |  Supabase Compatible  |  Production Ready
+-- =============================================================================
+--
+--  DESIGN PRINCIPLES
+--  ─────────────────
+--  1. Normalized where it matters (subjects, exams, users)
+--  2. JSONB for flexible, evolving fields (options, explanations, tags)
+--  3. Row-Level Security (RLS) ready for Supabase
+--  4. UUID primary keys everywhere (safe for distributed inserts)
+--  5. Soft deletes on critical tables (deleted_at IS NULL)
+--  6. Audit columns on every table (created_at, updated_at)
+--  7. Future-proofed for: CTET / HTET / REET expansion,
+--     AI explanations, institute white-labeling, live quiz modes
+--
+--  TABLE GROUPS
+--  ────────────
+--  [A] TAXONOMY      — exams, papers, subjects, chapters, topics
+--  [B] QUESTIONS     — core question bank with all metadata
+--  [C] USERS         — aspirants, institutes, admins
+--  [D] PRACTICE      — sessions, attempts, bookmarks, analytics
+--  [E] TESTS         — mock tests, test series, results
+--  [F] B2B           — institute management, API keys, usage
+--  [G] CONTENT       — AI explanations, discussion, reports
+--  [H] BILLING       — subscriptions, plans, payments
+--  [I] SYSTEM        — audit log, feature flags, notifications
+--
+-- =============================================================================
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";      -- trigram index for Hindi/English search
+CREATE EXTENSION IF NOT EXISTS "unaccent";      -- accent-insensitive search
+
+-- =============================================================================
+-- [A] TAXONOMY TABLES
+-- =============================================================================
+
+-- ─── A1. EXAMS ───────────────────────────────────────────────────────────────
+-- Supports UPTET, CTET, HTET, REET, MPTET etc. without schema changes
+CREATE TABLE exams (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code            VARCHAR(20)  NOT NULL UNIQUE,   -- 'UPTET', 'CTET', 'HTET'
+    name_en         VARCHAR(100) NOT NULL,           -- 'Uttar Pradesh Teacher Eligibility Test'
+    name_hi         VARCHAR(200),                    -- हिन्दी में पूरा नाम
+    state           VARCHAR(50),                     -- 'Uttar Pradesh', NULL for national
+    conducting_body VARCHAR(200),                    -- 'UPMSP'
+    is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ─── A2. EXAM PAPERS ─────────────────────────────────────────────────────────
+-- Paper 1 (Class 1-5) and Paper 2 (Class 6-8) for UPTET; different for CTET
+CREATE TABLE exam_papers (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    exam_id         UUID         NOT NULL REFERENCES exams(id) ON DELETE RESTRICT,
+    paper_number    SMALLINT     NOT NULL,           -- 1, 2
+    name_en         VARCHAR(100) NOT NULL,           -- 'Paper 1 (Class I-V)'
+    name_hi         VARCHAR(200),
+    total_questions SMALLINT     NOT NULL DEFAULT 150,
+    total_marks     SMALLINT     NOT NULL DEFAULT 150,
+    duration_mins   SMALLINT     NOT NULL DEFAULT 150,
+    negative_marking BOOLEAN     NOT NULL DEFAULT FALSE,
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (exam_id, paper_number)
+);
+
+-- ─── A3. EXAM SESSIONS (YEARS) ───────────────────────────────────────────────
+-- Each year's actual exam occurrence — tracks real PYQ source
+CREATE TABLE exam_sessions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    exam_paper_id   UUID         NOT NULL REFERENCES exam_papers(id) ON DELETE RESTRICT,
+    year            SMALLINT     NOT NULL,           -- 2017, 2019, 2021 ...
+    session         VARCHAR(20),                     -- 'First', 'Second', 'Morning', 'Evening'
+    held_on         DATE,
+    question_booklet_series VARCHAR(5),              -- 'A', 'B', 'C', 'D'
+    total_candidates INTEGER,
+    cutoff_general  DECIMAL(5,2),
+    cutoff_obc      DECIMAL(5,2),
+    cutoff_sc_st    DECIMAL(5,2),
+    source_pdf_url  TEXT,                            -- original PDF link for reference
+    is_verified     BOOLEAN      NOT NULL DEFAULT FALSE,
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (exam_paper_id, year, session)
+);
+
+-- ─── A4. SUBJECTS ─────────────────────────────────────────────────────────────
+-- CDP, Hindi, English, Sanskrit, Maths, EVS, Science, SocialStudies
+CREATE TABLE subjects (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    exam_paper_id   UUID         NOT NULL REFERENCES exam_papers(id) ON DELETE RESTRICT,
+    code            VARCHAR(30)  NOT NULL,           -- 'CDP', 'Hindi', 'Maths'
+    name_en         VARCHAR(100) NOT NULL,
+    name_hi         VARCHAR(200),
+    question_count  SMALLINT,                        -- how many Qs in this subject per paper
+    sort_order      SMALLINT     NOT NULL DEFAULT 0,
+    is_optional     BOOLEAN      NOT NULL DEFAULT FALSE, -- e.g. Language-II choice
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (exam_paper_id, code)
+);
+
+-- ─── A5. CHAPTERS ─────────────────────────────────────────────────────────────
+CREATE TABLE chapters (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    subject_id      UUID         NOT NULL REFERENCES subjects(id) ON DELETE RESTRICT,
+    slug            VARCHAR(100) NOT NULL,           -- 'learning', 'personality'
+    name_en         VARCHAR(200) NOT NULL,
+    name_hi         VARCHAR(300),
+    sort_order      SMALLINT     NOT NULL DEFAULT 0,
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (subject_id, slug)
+);
+
+-- ─── A6. TOPICS ───────────────────────────────────────────────────────────────
+CREATE TABLE topics (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    chapter_id      UUID         NOT NULL REFERENCES chapters(id) ON DELETE RESTRICT,
+    slug            VARCHAR(100) NOT NULL,           -- 'theories_of_learning'
+    name_en         VARCHAR(300) NOT NULL,
+    name_hi         VARCHAR(400),
+    sort_order      SMALLINT     NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (chapter_id, slug)
+);
+
+-- ─── A7. SUBTOPICS ────────────────────────────────────────────────────────────
+CREATE TABLE subtopics (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    topic_id        UUID         NOT NULL REFERENCES topics(id) ON DELETE RESTRICT,
+    slug            VARCHAR(100) NOT NULL,           -- 'operant_conditioning'
+    name_en         VARCHAR(300) NOT NULL,
+    name_hi         VARCHAR(400),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (topic_id, slug)
+);
+
+-- ─── A8. TAGS ─────────────────────────────────────────────────────────────────
+CREATE TABLE tags (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug            VARCHAR(100) NOT NULL UNIQUE,    -- 'galton', 'eugenics'
+    display         VARCHAR(200) NOT NULL,
+    category        VARCHAR(50),                     -- 'person', 'concept', 'year', 'act'
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+
+-- =============================================================================
+-- [B] QUESTION BANK
+-- =============================================================================
+
+-- ─── B1. QUESTIONS (CORE TABLE) ───────────────────────────────────────────────
+-- This is the heart of the platform. Designed for fast reads, flexible writes.
+CREATE TABLE questions (
+    -- Identity
+    id                  UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    legacy_id           VARCHAR(60) UNIQUE,      -- 'UPTET_P1_CDP_2017_002' for backward compat
+
+    -- Source / Taxonomy FKs
+    exam_session_id     UUID        NOT NULL REFERENCES exam_sessions(id) ON DELETE RESTRICT,
+    subject_id          UUID        NOT NULL REFERENCES subjects(id) ON DELETE RESTRICT,
+    chapter_id          UUID        REFERENCES chapters(id)  ON DELETE SET NULL,
+    topic_id            UUID        REFERENCES topics(id)    ON DELETE SET NULL,
+    subtopic_id         UUID        REFERENCES subtopics(id) ON DELETE SET NULL,
+
+    -- Denormalized for ultra-fast filtering without joins (synced by trigger)
+    exam_code           VARCHAR(20) NOT NULL,     -- 'UPTET'
+    paper_number        SMALLINT    NOT NULL,     -- 1 or 2
+    source_year         SMALLINT    NOT NULL,     -- 2017
+    subject_code        VARCHAR(30) NOT NULL,     -- 'CDP'
+    chapter_slug        VARCHAR(100),
+    topic_slug          VARCHAR(100),
+    subtopic_slug       VARCHAR(100),
+
+    -- Question Content (bilingual)
+    question_hi         TEXT,                    -- Hindi question text
+    question_en         TEXT,                    -- English question text
+
+    -- Options stored as JSONB for flexibility
+    -- Schema: {"A": "...", "B": "...", "C": "...", "D": "..."}
+    -- Can extend to 5 options or True/False without migration
+    options             JSONB       NOT NULL,
+
+    -- Answer
+    correct_option      CHAR(1)     NOT NULL CHECK (correct_option IN ('A','B','C','D','E')),
+
+    -- Classification
+    difficulty          VARCHAR(10) NOT NULL DEFAULT 'medium'
+                            CHECK (difficulty IN ('easy','medium','hard')),
+    bloom_level         VARCHAR(20) NOT NULL DEFAULT 'remember'
+                            CHECK (bloom_level IN (
+                                'remember','understand','apply',
+                                'analyse','evaluate','create'
+                            )),
+    question_type       VARCHAR(30) NOT NULL DEFAULT 'factual'
+                            CHECK (question_type IN (
+                                'factual','conceptual','application',
+                                'vocabulary','analytical'
+                            )),
+
+    -- Flags
+    is_pyq              BOOLEAN     NOT NULL DEFAULT TRUE,
+    is_verified         BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_active           BOOLEAN     NOT NULL DEFAULT TRUE,  -- soft toggle, not delete
+    is_reported         BOOLEAN     NOT NULL DEFAULT FALSE,
+
+    -- AI / Quality fields
+    explanation_hi      TEXT,                    -- AI or manually written explanation
+    explanation_en      TEXT,
+    explanation_source  VARCHAR(20)              -- 'ai', 'manual', 'community'
+                            CHECK (explanation_source IN ('ai','manual','community')),
+    explanation_verified BOOLEAN    NOT NULL DEFAULT FALSE,
+
+    -- Derived analytics (updated by background job, NOT triggers — performance)
+    attempt_count       INTEGER     NOT NULL DEFAULT 0,
+    correct_count       INTEGER     NOT NULL DEFAULT 0,
+    accuracy_pct        DECIMAL(5,2),            -- recomputed nightly
+    avg_time_secs       DECIMAL(7,2),
+
+    -- Full-text search vectors (updated by trigger)
+    search_vector_hi    TSVECTOR GENERATED ALWAYS AS (
+                            to_tsvector('simple', COALESCE(question_hi, ''))
+                        ) STORED,
+    search_vector_en    TSVECTOR GENERATED ALWAYS AS (
+                            to_tsvector('english', COALESCE(question_en, ''))
+                        ) STORED,
+
+    -- Audit
+    created_by          UUID,                    -- admin/system UUID
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at          TIMESTAMPTZ              -- soft delete
+);
+
+-- ─── B2. QUESTION ↔ TAGS (M2M) ───────────────────────────────────────────────
+CREATE TABLE question_tags (
+    question_id     UUID    NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    tag_id          UUID    NOT NULL REFERENCES tags(id)      ON DELETE CASCADE,
+    PRIMARY KEY (question_id, tag_id)
+);
+
+-- ─── B3. QUESTION SIMILAR PAIRS ───────────────────────────────────────────────
+-- For "similar questions" feature and deduplication
+CREATE TABLE question_similarities (
+    question_a_id   UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    question_b_id   UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    similarity_score DECIMAL(4,3),               -- 0.000 to 1.000
+    match_type      VARCHAR(20)                  -- 'exact', 'near_duplicate', 'same_concept'
+                        CHECK (match_type IN ('exact','near_duplicate','same_concept')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (question_a_id, question_b_id),
+    CHECK (question_a_id < question_b_id)        -- prevent (A,B) and (B,A) duplicates
+);
+
+-- ─── B4. QUESTION REPORTS (crowd-sourced QC) ──────────────────────────────────
+CREATE TABLE question_reports (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    reporter_id     UUID,                        -- NULL for anonymous
+    report_type     VARCHAR(30) NOT NULL
+                        CHECK (report_type IN (
+                            'wrong_answer','wrong_translation','poor_explanation',
+                            'duplicate','outdated','other'
+                        )),
+    description     TEXT,
+    status          VARCHAR(20) NOT NULL DEFAULT 'open'
+                        CHECK (status IN ('open','reviewed','resolved','dismissed')),
+    resolved_by     UUID,
+    resolved_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- =============================================================================
+-- [C] USERS
+-- =============================================================================
+
+-- ─── C1. USER PROFILES ────────────────────────────────────────────────────────
+-- Extends Supabase Auth (auth.users). One row per user regardless of role.
+CREATE TABLE user_profiles (
+    id              UUID        PRIMARY KEY,      -- matches auth.users.id
+    role            VARCHAR(20) NOT NULL DEFAULT 'aspirant'
+                        CHECK (role IN ('aspirant','institute_admin','institute_staff','admin','superadmin')),
+    full_name       VARCHAR(200),
+    phone           VARCHAR(20),
+    avatar_url      TEXT,
+    preferred_lang  CHAR(2)     NOT NULL DEFAULT 'hi'
+                        CHECK (preferred_lang IN ('hi','en')),
+
+    -- Aspirant-specific
+    target_exam_id  UUID        REFERENCES exams(id) ON DELETE SET NULL,
+    target_paper    SMALLINT,
+    target_year     SMALLINT,                    -- which year they plan to appear
+    state           VARCHAR(50),                 -- their state (for state-specific TET)
+
+    -- Onboarding
+    onboarding_done BOOLEAN     NOT NULL DEFAULT FALSE,
+    subjects_opted  JSONB       NOT NULL DEFAULT '[]', -- ["CDP","Hindi","Maths","EVS","English"]
+
+    -- Engagement
+    streak_days     SMALLINT    NOT NULL DEFAULT 0,
+    last_active_at  TIMESTAMPTZ,
+    total_questions_attempted INTEGER NOT NULL DEFAULT 0,
+    total_correct   INTEGER     NOT NULL DEFAULT 0,
+
+    -- Flags
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    is_banned       BOOLEAN     NOT NULL DEFAULT FALSE,
+    ban_reason      TEXT,
+
+    -- Audit
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── C2. INSTITUTES ───────────────────────────────────────────────────────────
+CREATE TABLE institutes (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            VARCHAR(300) NOT NULL,
+    slug            VARCHAR(100) NOT NULL UNIQUE, -- for subdomain/white-label
+    owner_id        UUID         NOT NULL REFERENCES user_profiles(id),
+    city            VARCHAR(100),
+    state           VARCHAR(50),
+    phone           VARCHAR(20),
+    email           VARCHAR(200),
+    website         TEXT,
+    logo_url        TEXT,
+
+    -- White-label config
+    brand_color     VARCHAR(7),                  -- '#c8860a'
+    custom_domain   TEXT,
+    watermark_text  VARCHAR(200),                -- printed on exported papers
+
+    -- Status
+    is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    verified_at     TIMESTAMPTZ,
+    meta            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ─── C3. INSTITUTE MEMBERS ────────────────────────────────────────────────────
+CREATE TABLE institute_members (
+    institute_id    UUID        NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    role            VARCHAR(20) NOT NULL DEFAULT 'staff'
+                        CHECK (role IN ('owner','admin','staff')),
+    joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (institute_id, user_id)
+);
+
+
+-- =============================================================================
+-- [D] PRACTICE ENGINE
+-- =============================================================================
+
+-- ─── D1. PRACTICE SESSIONS ────────────────────────────────────────────────────
+-- One session = one sitting (topic practice, full mock, revision etc.)
+CREATE TABLE practice_sessions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+    -- Session config
+    session_type    VARCHAR(20) NOT NULL
+                        CHECK (session_type IN (
+                            'topic_practice','mock_test','pyq_paper',
+                            'revision','challenge','custom'
+                        )),
+    -- Filters used to generate this session (stored for reproducibility)
+    filters         JSONB       NOT NULL DEFAULT '{}',
+    -- e.g. {"subject_code":"CDP","topic_slug":"theories_of_learning","difficulty":"medium","year":2017}
+
+    exam_session_id UUID        REFERENCES exam_sessions(id) ON DELETE SET NULL,
+    total_questions SMALLINT    NOT NULL,
+    time_limit_secs INTEGER,                     -- NULL = untimed
+
+    -- Results (updated as user progresses)
+    status          VARCHAR(20) NOT NULL DEFAULT 'in_progress'
+                        CHECK (status IN ('in_progress','completed','abandoned')),
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at    TIMESTAMPTZ,
+    time_taken_secs INTEGER,
+
+    -- Scores
+    attempted       SMALLINT    NOT NULL DEFAULT 0,
+    correct         SMALLINT    NOT NULL DEFAULT 0,
+    wrong           SMALLINT    NOT NULL DEFAULT 0,
+    skipped         SMALLINT    NOT NULL DEFAULT 0,
+    score           DECIMAL(6,2),
+    max_score       DECIMAL(6,2),
+    percentile      DECIMAL(5,2),               -- computed after enough attempts
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── D2. QUESTION ATTEMPTS ────────────────────────────────────────────────────
+-- Every single Q attempt — core analytics data
+CREATE TABLE question_attempts (
+    id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID        NOT NULL REFERENCES practice_sessions(id) ON DELETE CASCADE,
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE RESTRICT,
+
+    -- Answer
+    selected_option CHAR(1)     CHECK (selected_option IN ('A','B','C','D','E')),
+    is_correct      BOOLEAN,
+    is_skipped      BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_marked       BOOLEAN     NOT NULL DEFAULT FALSE,  -- "mark for review"
+
+    -- Time
+    time_taken_secs SMALLINT,
+
+    -- Sequence within session
+    question_order  SMALLINT    NOT NULL,
+
+    -- State flags
+    hint_used       BOOLEAN     NOT NULL DEFAULT FALSE,
+    explanation_viewed BOOLEAN  NOT NULL DEFAULT FALSE,
+
+    attempted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── D3. BOOKMARKS ────────────────────────────────────────────────────────────
+CREATE TABLE bookmarks (
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    collection      VARCHAR(100) NOT NULL DEFAULT 'default', -- named collections
+    note            TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, question_id, collection)
+);
+
+-- ─── D4. USER SUBJECT ANALYTICS (Materialized / Updated Nightly) ──────────────
+-- Pre-aggregated per user per subject — drives dashboard without heavy queries
+CREATE TABLE user_subject_stats (
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    subject_id      UUID        NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    attempts        INTEGER     NOT NULL DEFAULT 0,
+    correct         INTEGER     NOT NULL DEFAULT 0,
+    accuracy_pct    DECIMAL(5,2),
+    avg_time_secs   DECIMAL(7,2),
+    weak_topics     JSONB       NOT NULL DEFAULT '[]',  -- [{"topic_slug":"...","accuracy":32.5}]
+    strong_topics   JSONB       NOT NULL DEFAULT '[]',
+    last_updated    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, subject_id)
+);
+
+-- ─── D5. USER TOPIC ANALYTICS ─────────────────────────────────────────────────
+CREATE TABLE user_topic_stats (
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    topic_id        UUID        NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    attempts        INTEGER     NOT NULL DEFAULT 0,
+    correct         INTEGER     NOT NULL DEFAULT 0,
+    accuracy_pct    DECIMAL(5,2),
+    last_attempted  TIMESTAMPTZ,
+    mastery_level   VARCHAR(20)                  -- 'not_started','learning','proficient','mastered'
+                        CHECK (mastery_level IN ('not_started','learning','proficient','mastered')),
+    PRIMARY KEY (user_id, topic_id)
+);
+
+-- ─── D6. STREAKS & GAMIFICATION ───────────────────────────────────────────────
+CREATE TABLE user_streaks (
+    user_id         UUID        PRIMARY KEY REFERENCES user_profiles(id) ON DELETE CASCADE,
+    current_streak  SMALLINT    NOT NULL DEFAULT 0,
+    longest_streak  SMALLINT    NOT NULL DEFAULT 0,
+    last_activity   DATE,
+    total_xp        INTEGER     NOT NULL DEFAULT 0,
+    level           SMALLINT    NOT NULL DEFAULT 1,
+    badges          JSONB       NOT NULL DEFAULT '[]'  -- [{"badge":"first_test","earned_at":"..."}]
+);
+
+
+-- =============================================================================
+-- [E] TEST SERIES & MOCK TESTS
+-- =============================================================================
+
+-- ─── E1. TEST SERIES ──────────────────────────────────────────────────────────
+-- A named collection of tests (e.g. "UPTET 2024 Complete Mock Series")
+CREATE TABLE test_series (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title           VARCHAR(300) NOT NULL,
+    description     TEXT,
+    exam_paper_id   UUID         NOT NULL REFERENCES exam_papers(id) ON DELETE RESTRICT,
+    institute_id    UUID         REFERENCES institutes(id) ON DELETE SET NULL,  -- NULL = platform-wide
+    is_public       BOOLEAN      NOT NULL DEFAULT TRUE,
+    is_free         BOOLEAN      NOT NULL DEFAULT FALSE,
+    price_inr       DECIMAL(8,2) NOT NULL DEFAULT 0,
+    total_tests     SMALLINT     NOT NULL DEFAULT 0,
+    thumbnail_url   TEXT,
+    sort_order      SMALLINT     NOT NULL DEFAULT 0,
+    created_by      UUID         REFERENCES user_profiles(id),
+    published_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ─── E2. TESTS ────────────────────────────────────────────────────────────────
+-- Individual tests within a series (or standalone mock)
+CREATE TABLE tests (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    series_id       UUID         REFERENCES test_series(id) ON DELETE SET NULL,
+    title           VARCHAR(300) NOT NULL,
+    test_type       VARCHAR(20)  NOT NULL DEFAULT 'mock'
+                        CHECK (test_type IN ('mock','pyq','topic','sectional','custom')),
+    exam_paper_id   UUID         NOT NULL REFERENCES exam_papers(id) ON DELETE RESTRICT,
+    total_questions SMALLINT     NOT NULL DEFAULT 150,
+    total_marks     SMALLINT     NOT NULL DEFAULT 150,
+    duration_mins   SMALLINT     NOT NULL DEFAULT 150,
+    negative_marking BOOLEAN     NOT NULL DEFAULT FALSE,
+    negative_value  DECIMAL(3,2) NOT NULL DEFAULT 0,
+
+    -- Generation config (used to auto-generate questions)
+    generation_config JSONB      NOT NULL DEFAULT '{}',
+    -- e.g. {"CDP":30,"Hindi":30,"Maths":30,"EVS":30,"English":30,
+    --        "difficulty_mix":{"easy":0.4,"medium":0.4,"hard":0.2}}
+
+    is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    is_public       BOOLEAN      NOT NULL DEFAULT TRUE,
+    series_order    SMALLINT,                    -- position within series
+    available_from  TIMESTAMPTZ,
+    available_until TIMESTAMPTZ,
+    created_by      UUID         REFERENCES user_profiles(id),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ─── E3. TEST QUESTIONS ───────────────────────────────────────────────────────
+-- Which questions are in which test (supports custom ordering)
+CREATE TABLE test_questions (
+    test_id         UUID        NOT NULL REFERENCES tests(id)     ON DELETE CASCADE,
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE RESTRICT,
+    question_order  SMALLINT    NOT NULL,
+    section         VARCHAR(50),                 -- 'Part-I', 'CDP' etc.
+    marks           DECIMAL(4,2) NOT NULL DEFAULT 1,
+    PRIMARY KEY (test_id, question_id)
+);
+
+-- ─── E4. USER TEST ATTEMPTS ───────────────────────────────────────────────────
+-- Links practice_sessions to a specific test for structured test results
+CREATE TABLE test_attempts (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    test_id         UUID        NOT NULL REFERENCES tests(id)             ON DELETE RESTRICT,
+    session_id      UUID        NOT NULL UNIQUE REFERENCES practice_sessions(id) ON DELETE CASCADE,
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id)     ON DELETE CASCADE,
+    rank            INTEGER,                     -- computed after exam window closes
+    percentile      DECIMAL(5,2),
+    subject_scores  JSONB       NOT NULL DEFAULT '{}',
+    -- {"CDP":{"attempted":30,"correct":22,"score":22},"Maths":{...}}
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── E5. TEST SERIES ENROLLMENT ───────────────────────────────────────────────
+CREATE TABLE test_series_enrollments (
+    series_id       UUID        NOT NULL REFERENCES test_series(id) ON DELETE CASCADE,
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    enrolled_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ,
+    payment_id      UUID,                        -- ref to payments table
+    PRIMARY KEY (series_id, user_id)
+);
+
+
+-- =============================================================================
+-- [F] B2B — INSTITUTE & API
+-- =============================================================================
+
+-- ─── F1. API KEYS ─────────────────────────────────────────────────────────────
+CREATE TABLE api_keys (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    institute_id    UUID        NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+    key_hash        VARCHAR(64) NOT NULL UNIQUE, -- SHA-256 of actual key (never store raw)
+    key_prefix      VARCHAR(12) NOT NULL,        -- 'uptet_live_ab12' — shown in dashboard
+    name            VARCHAR(100) NOT NULL,       -- 'Production', 'Test'
+    scopes          JSONB       NOT NULL DEFAULT '["questions:read"]',
+    -- possible: "questions:read", "questions:write", "tests:create", "analytics:read"
+    rate_limit_rpm  SMALLINT    NOT NULL DEFAULT 60,
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    last_used_at    TIMESTAMPTZ,
+    expires_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── F2. API USAGE LOGS ───────────────────────────────────────────────────────
+-- Partitioned by month for performance (use pg_partman in prod)
+-- Drop/recreate is simplest if you haven’t deployed yet.
+-- If you already ran it partially, drop partitions/constraints accordingly.
+
+CREATE TABLE api_usage_logs (
+    id              UUID        NOT NULL DEFAULT uuid_generate_v4(),
+    api_key_id      UUID        NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+    institute_id    UUID        NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+    endpoint        VARCHAR(200) NOT NULL,
+    method          VARCHAR(10)  NOT NULL,
+    status_code     SMALLINT    NOT NULL,
+    response_time_ms SMALLINT,
+    questions_returned SMALLINT,
+    ip_address      INET,
+    requested_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (requested_at, id)
+) PARTITION BY RANGE (requested_at);
+
+-- Create partitions for next 2 years (add more via cron)
+CREATE TABLE api_usage_logs_2024 PARTITION OF api_usage_logs
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE api_usage_logs_2025 PARTITION OF api_usage_logs
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE api_usage_logs_2026 PARTITION OF api_usage_logs
+    FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+
+-- ─── F3. INSTITUTE TEST TEMPLATES ─────────────────────────────────────────────
+-- Institutes can save question-paper templates for reuse
+CREATE TABLE institute_test_templates (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    institute_id    UUID        NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+    name            VARCHAR(200) NOT NULL,
+    description     TEXT,
+    exam_paper_id   UUID        REFERENCES exam_papers(id),
+    config          JSONB       NOT NULL DEFAULT '{}',
+    -- same schema as tests.generation_config
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_by      UUID        REFERENCES user_profiles(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── F4. INSTITUTE EXPORTS ─────────────────────────────────────────────────────
+-- Track every PDF / DOCX / JSON export for billing and audit
+CREATE TABLE institute_exports (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    institute_id    UUID        NOT NULL REFERENCES institutes(id) ON DELETE CASCADE,
+    exported_by     UUID        NOT NULL REFERENCES user_profiles(id),
+    export_type     VARCHAR(10) NOT NULL CHECK (export_type IN ('pdf','docx','json','csv')),
+    test_id         UUID        REFERENCES tests(id),
+    question_count  SMALLINT    NOT NULL,
+    file_url        TEXT,
+    file_size_kb    INTEGER,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','processing','done','failed')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at    TIMESTAMPTZ
+);
+
+
+-- =============================================================================
+-- [G] CONTENT — Explanations, Discussions, Notifications
+-- =============================================================================
+
+-- ─── G1. AI EXPLANATION JOBS ──────────────────────────────────────────────────
+-- Queue for generating explanations via Claude API
+CREATE TABLE explanation_jobs (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','processing','done','failed')),
+    model_used      VARCHAR(50),                 -- 'claude-haiku-4-5'
+    prompt_tokens   INTEGER,
+    completion_tokens INTEGER,
+    cost_usd        DECIMAL(10,6),
+    error_message   TEXT,
+    retry_count     SMALLINT    NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at    TIMESTAMPTZ
+);
+
+-- ─── G2. COMMUNITY DISCUSSIONS ────────────────────────────────────────────────
+CREATE TABLE question_discussions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    question_id     UUID        NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id),
+    parent_id       UUID        REFERENCES question_discussions(id) ON DELETE CASCADE,
+    body            TEXT        NOT NULL,
+    lang            CHAR(2)     NOT NULL DEFAULT 'hi',
+    upvotes         INTEGER     NOT NULL DEFAULT 0,
+    is_pinned       BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_deleted      BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── G3. NOTIFICATIONS ────────────────────────────────────────────────────────
+CREATE TABLE notifications (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID        NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    type            VARCHAR(50) NOT NULL,
+    -- 'test_reminder','streak_broken','new_mock_available','exam_result_announced'
+    title           VARCHAR(300) NOT NULL,
+    body            TEXT,
+    action_url      TEXT,
+    is_read         BOOLEAN     NOT NULL DEFAULT FALSE,
+    sent_via        JSONB       NOT NULL DEFAULT '[]', -- ["push","email"]
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── G4. TOPIC FREQUENCY ANALYTICS (Platform-wide) ───────────────────────────
+-- Pre-computed: which topics appear how often across years — big selling point
+CREATE MATERIALIZED VIEW topic_frequency AS
+SELECT
+    s.code              AS subject_code,
+    s.name_en           AS subject_name,
+    ch.slug             AS chapter_slug,
+    ch.name_en          AS chapter_name,
+    t.slug              AS topic_slug,
+    t.name_en           AS topic_name,
+    COUNT(q.id)         AS total_questions,
+    COUNT(DISTINCT es.year) AS years_appeared,
+    ARRAY_AGG(DISTINCT es.year ORDER BY es.year) AS year_list,
+    ROUND(COUNT(q.id)::decimal / NULLIF(COUNT(DISTINCT es.year), 0), 2) AS avg_per_year,
+    SUM(CASE WHEN q.difficulty = 'easy'   THEN 1 ELSE 0 END) AS easy_count,
+    SUM(CASE WHEN q.difficulty = 'medium' THEN 1 ELSE 0 END) AS medium_count,
+    SUM(CASE WHEN q.difficulty = 'hard'   THEN 1 ELSE 0 END) AS hard_count
+FROM questions q
+JOIN subjects     s  ON q.subject_id  = s.id
+JOIN chapters     ch ON q.chapter_id  = ch.id
+JOIN topics       t  ON q.topic_id    = t.id
+JOIN exam_sessions es ON q.exam_session_id = es.id
+WHERE q.is_active = TRUE AND q.deleted_at IS NULL
+GROUP BY s.code, s.name_en, ch.slug, ch.name_en, t.slug, t.name_en
+ORDER BY total_questions DESC;
+
+CREATE UNIQUE INDEX ON topic_frequency (subject_code, chapter_slug, topic_slug);
+
+
+-- =============================================================================
+-- [H] BILLING & SUBSCRIPTIONS
+-- =============================================================================
+
+-- ─── H1. PLANS ────────────────────────────────────────────────────────────────
+CREATE TABLE plans (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code            VARCHAR(30)  NOT NULL UNIQUE, -- 'free','pro_monthly','pro_annual','institute_monthly'
+    name            VARCHAR(100) NOT NULL,
+    plan_type       VARCHAR(20)  NOT NULL CHECK (plan_type IN ('b2c','b2b')),
+    price_inr       DECIMAL(8,2) NOT NULL DEFAULT 0,
+    billing_period  VARCHAR(20)  NOT NULL DEFAULT 'monthly'
+                        CHECK (billing_period IN ('monthly','annual','one_time')),
+    features        JSONB        NOT NULL DEFAULT '{}',
+    -- {"mock_tests_per_month":-1,"ai_explanations":true,"api_access":false,...}
+    is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+    sort_order      SMALLINT     NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ─── H2. SUBSCRIPTIONS ────────────────────────────────────────────────────────
+CREATE TABLE subscriptions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID         REFERENCES user_profiles(id) ON DELETE SET NULL,
+    institute_id    UUID         REFERENCES institutes(id)    ON DELETE SET NULL,
+    plan_id         UUID         NOT NULL REFERENCES plans(id) ON DELETE RESTRICT,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active','cancelled','expired','paused','trial')),
+    started_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ,
+    cancelled_at    TIMESTAMPTZ,
+    cancel_reason   TEXT,
+    razorpay_sub_id VARCHAR(100) UNIQUE,         -- Razorpay subscription ID
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    CHECK (
+        (user_id IS NOT NULL AND institute_id IS NULL) OR
+        (user_id IS NULL AND institute_id IS NOT NULL)
+    )                                            -- must belong to user OR institute, not both
+);
+
+-- ─── H3. PAYMENTS ─────────────────────────────────────────────────────────────
+CREATE TABLE payments (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    subscription_id     UUID         REFERENCES subscriptions(id) ON DELETE SET NULL,
+    user_id             UUID         REFERENCES user_profiles(id) ON DELETE SET NULL,
+    institute_id        UUID         REFERENCES institutes(id)    ON DELETE SET NULL,
+    amount_inr          DECIMAL(10,2) NOT NULL,
+    currency            CHAR(3)      NOT NULL DEFAULT 'INR',
+    status              VARCHAR(20)  NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','captured','failed','refunded')),
+    razorpay_order_id   VARCHAR(100),
+    razorpay_payment_id VARCHAR(100) UNIQUE,
+    razorpay_signature  VARCHAR(200),
+    payment_method      VARCHAR(30),             -- 'upi','card','netbanking'
+    failure_reason      TEXT,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    captured_at         TIMESTAMPTZ
+);
+
+-- ─── H4. REFERRALS ────────────────────────────────────────────────────────────
+CREATE TABLE referrals (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    referrer_id     UUID        NOT NULL REFERENCES user_profiles(id),
+    referred_id     UUID        NOT NULL REFERENCES user_profiles(id),
+    referral_code   VARCHAR(20) NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','converted','rewarded')),
+    reward_given    BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    converted_at    TIMESTAMPTZ,
+    UNIQUE (referrer_id, referred_id)
+);
+
+
+-- =============================================================================
+-- [I] SYSTEM
+-- =============================================================================
+
+-- ─── I1. AUDIT LOG ────────────────────────────────────────────────────────────
+CREATE TABLE audit_log (
+    id              BIGSERIAL,
+    actor_id        UUID,
+    action          VARCHAR(50) NOT NULL,
+    entity_type     VARCHAR(50),
+    entity_id       UUID,
+    old_value       JSONB,
+    new_value       JSONB,
+    ip_address      INET,
+    user_agent      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+CREATE TABLE audit_log_2024 PARTITION OF audit_log
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE audit_log_2025 PARTITION OF audit_log
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE audit_log_2026 PARTITION OF audit_log
+    FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+
+-- ─── I2. FEATURE FLAGS ────────────────────────────────────────────────────────
+CREATE TABLE feature_flags (
+    key             VARCHAR(100) PRIMARY KEY,
+    description     TEXT,
+    is_enabled      BOOLEAN     NOT NULL DEFAULT FALSE,
+    enabled_for     JSONB       NOT NULL DEFAULT '{}',
+    -- {"roles":["admin"],"user_ids":["uuid1"],"institute_ids":["uuid2"]}
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── I3. SYSTEM SETTINGS ──────────────────────────────────────────────────────
+CREATE TABLE system_settings (
+    key             VARCHAR(100) PRIMARY KEY,
+    value           JSONB        NOT NULL,
+    description     TEXT,
+    updated_by      UUID,
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+
+-- =============================================================================
+-- INDEXES — Carefully chosen for the most common query patterns
+-- =============================================================================
+
+-- Questions — primary filters
+CREATE INDEX idx_questions_subject     ON questions (subject_id)     WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_chapter     ON questions (chapter_id)     WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_topic       ON questions (topic_id)       WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_session     ON questions (exam_session_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_year        ON questions (source_year)    WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_difficulty  ON questions (difficulty)     WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_bloom       ON questions (bloom_level)    WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_verified    ON questions (is_verified)    WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_paper       ON questions (paper_number)   WHERE deleted_at IS NULL;
+CREATE INDEX idx_questions_exam_code   ON questions (exam_code)      WHERE deleted_at IS NULL;
+
+-- Composite — most common API call: filter by exam + subject + year
+CREATE INDEX idx_questions_api_filter  ON questions (exam_code, subject_code, source_year)
+    WHERE deleted_at IS NULL AND is_active = TRUE;
+
+-- Full-text search
+CREATE INDEX idx_questions_search_hi   ON questions USING GIN (search_vector_hi);
+CREATE INDEX idx_questions_search_en   ON questions USING GIN (search_vector_en);
+
+-- Trigram search for partial-word Hindi/English match
+CREATE INDEX idx_questions_trgm_hi     ON questions USING GIN (question_hi gin_trgm_ops)
+    WHERE question_hi IS NOT NULL;
+CREATE INDEX idx_questions_trgm_en     ON questions USING GIN (question_en gin_trgm_ops)
+    WHERE question_en IS NOT NULL;
+
+-- JSONB tag index (for tag-based filtering)
+CREATE INDEX idx_questions_tags        ON question_tags (tag_id);
+
+-- Attempts — analytics queries
+CREATE INDEX idx_attempts_user         ON question_attempts (user_id, attempted_at DESC);
+CREATE INDEX idx_attempts_question     ON question_attempts (question_id);
+CREATE INDEX idx_attempts_session      ON question_attempts (session_id);
+
+-- Sessions
+CREATE INDEX idx_sessions_user         ON practice_sessions (user_id, started_at DESC);
+CREATE INDEX idx_sessions_status       ON practice_sessions (user_id, status);
+
+-- Bookmarks
+CREATE INDEX idx_bookmarks_user        ON bookmarks (user_id, collection);
+
+-- Test attempts
+CREATE INDEX idx_test_attempts_test    ON test_attempts (test_id);
+CREATE INDEX idx_test_attempts_user    ON test_attempts (user_id);
+
+-- API usage
+CREATE INDEX idx_api_usage_key         ON api_usage_logs (api_key_id, requested_at DESC);
+CREATE INDEX idx_api_usage_institute   ON api_usage_logs (institute_id, requested_at DESC);
+
+-- Subscriptions
+CREATE INDEX idx_subscriptions_user    ON subscriptions (user_id, status);
+CREATE INDEX idx_subscriptions_inst    ON subscriptions (institute_id, status);
+
+-- Payments
+CREATE INDEX idx_payments_user         ON payments (user_id, created_at DESC);
+
+-- Discussions
+CREATE INDEX idx_discussions_question  ON question_discussions (question_id)
+    WHERE is_deleted = FALSE;
+
+-- Notifications
+CREATE INDEX idx_notifications_user    ON notifications (user_id, is_read, created_at DESC);
+
+
+-- =============================================================================
+-- TRIGGERS
+-- =============================================================================
+
+-- Auto-update updated_at
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_questions_updated_at      BEFORE UPDATE ON questions      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_user_profiles_updated_at  BEFORE UPDATE ON user_profiles  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_institutes_updated_at     BEFORE UPDATE ON institutes     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_tests_updated_at          BEFORE UPDATE ON tests          FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_test_series_updated_at    BEFORE UPDATE ON test_series    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_subscriptions_updated_at  BEFORE UPDATE ON subscriptions  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Update question attempt counts (denormalized for fast question cards)
+CREATE OR REPLACE FUNCTION update_question_stats()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.is_skipped = FALSE THEN
+        UPDATE questions SET
+            attempt_count = attempt_count + 1,
+            correct_count = correct_count + CASE WHEN NEW.is_correct THEN 1 ELSE 0 END
+        WHERE id = NEW.question_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_attempt_question_stats
+    AFTER INSERT ON question_attempts
+    FOR EACH ROW EXECUTE FUNCTION update_question_stats();
+
+-- Auto-flag question when 3+ reports filed
+CREATE OR REPLACE FUNCTION auto_flag_question()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE questions SET is_reported = TRUE
+    WHERE id = NEW.question_id
+      AND (SELECT COUNT(*) FROM question_reports
+           WHERE question_id = NEW.question_id AND status = 'open') >= 3;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_flag_question
+    AFTER INSERT ON question_reports
+    FOR EACH ROW EXECUTE FUNCTION auto_flag_question();
+
+
+-- =============================================================================
+-- ROW LEVEL SECURITY (Supabase RLS Policies)
+-- =============================================================================
+
+ALTER TABLE questions              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE practice_sessions      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE question_attempts      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookmarks              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_subject_stats     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_topic_stats       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE test_attempts          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE institute_members      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions          ENABLE ROW LEVEL SECURITY;
+
+-- Questions: active questions visible to all authenticated users
+CREATE POLICY "questions_public_read" ON questions
+    FOR SELECT USING (is_active = TRUE AND deleted_at IS NULL);
+
+-- Users can only see their own profile
+CREATE POLICY "profiles_own_read" ON user_profiles
+    FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "profiles_own_update" ON user_profiles
+    FOR UPDATE USING (auth.uid() = id);
+
+-- Practice sessions: only own sessions
+CREATE POLICY "sessions_own" ON practice_sessions
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Attempts: only own attempts
+CREATE POLICY "attempts_own" ON question_attempts
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Bookmarks: only own bookmarks
+CREATE POLICY "bookmarks_own" ON bookmarks
+    FOR ALL USING (auth.uid() = user_id);
+
+-- Notifications: only own notifications
+CREATE POLICY "notifications_own" ON notifications
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "notifications_own_update" ON notifications
+    FOR UPDATE USING (auth.uid() = user_id);
+
+-- API keys: institute members only
+CREATE POLICY "api_keys_institute_read" ON api_keys
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM institute_members im
+            WHERE im.institute_id = api_keys.institute_id
+              AND im.user_id = auth.uid()
+        )
+    );
+
+-- Payments: own payments only
+CREATE POLICY "payments_own" ON payments
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- Subscriptions: own subscriptions
+CREATE POLICY "subscriptions_own" ON subscriptions
+    FOR SELECT USING (auth.uid() = user_id);
+
+
+-- =============================================================================
+-- SEED DATA — Core lookup values
+-- =============================================================================
+
+-- Default Plans
+INSERT INTO plans (code, name, plan_type, price_inr, billing_period, features, sort_order) VALUES
+('free',             'Free',              'b2c', 0,       'monthly', '{"mock_tests_per_month":5,"ai_explanations":false,"analytics_basic":true,"bookmarks":20}',        1),
+('pro_monthly',      'Aspirant Pro',      'b2c', 149,     'monthly', '{"mock_tests_per_month":-1,"ai_explanations":true,"analytics_full":true,"bookmarks":-1}',        2),
+('pro_annual',       'Aspirant Pro (Annual)','b2c',999,   'annual',  '{"mock_tests_per_month":-1,"ai_explanations":true,"analytics_full":true,"bookmarks":-1}',        3),
+('institute_monthly','Institute API',     'b2b', 2999,    'monthly', '{"api_access":true,"exports_per_month":50,"white_label":true,"seats":5}',                       4),
+('institute_annual', 'Institute API (Annual)','b2b',24999,'annual',  '{"api_access":true,"exports_per_month":-1,"white_label":true,"seats":10,"priority_support":true}',5);
+
+-- Feature Flags
+INSERT INTO feature_flags (key, description, is_enabled) VALUES
+('ai_explanations',     'AI-powered Hindi explanations via Claude API', FALSE),
+('live_quiz_mode',      'Real-time competitive quiz (Phase 4)',          FALSE),
+('ctet_expansion',      'CTET question bank (Phase 3)',                  FALSE),
+('institute_api',       'B2B REST API access',                           FALSE),
+('leaderboard',         'Public accuracy leaderboard',                   TRUE),
+('dark_mode',           'Dark mode UI toggle',                           TRUE),
+('referral_program',    'Referral rewards program',                      FALSE);
+
+-- System Settings
+INSERT INTO system_settings (key, value, description) VALUES
+('ai_explanation_model',    '"claude-haiku-4-5-20251001"',  'Anthropic model for explanations'),
+('max_questions_per_api',   '100',                           'Max questions per API response'),
+('free_tier_tests_limit',   '5',                             'Mock tests per month on free plan'),
+('accuracy_cache_ttl_hrs',  '12',                            'Hours before accuracy_pct is recomputed');
+
+
+-- =============================================================================
+-- HELPER VIEWS — Pre-built for common application queries
+-- =============================================================================
+
+-- Question card view (all joins pre-resolved — use for listing pages)
+CREATE VIEW question_cards AS
+SELECT
+    q.id,
+    q.legacy_id,
+    q.question_hi,
+    q.question_en,
+    q.options,
+    q.correct_option,
+    q.difficulty,
+    q.bloom_level,
+    q.question_type,
+    q.is_verified,
+    q.explanation_hi,
+    q.explanation_en,
+    q.explanation_verified,
+    q.attempt_count,
+    q.correct_count,
+    q.accuracy_pct,
+    q.avg_time_secs,
+    q.source_year,
+    q.paper_number,
+    q.exam_code,
+    q.subject_code,
+    q.chapter_slug,
+    q.topic_slug,
+    q.subtopic_slug,
+    s.name_en   AS subject_name,
+    s.name_hi   AS subject_name_hi,
+    ch.name_en  AS chapter_name,
+    t.name_en   AS topic_name,
+    st.name_en  AS subtopic_name,
+    COALESCE(
+        (SELECT ARRAY_AGG(tg.slug) FROM question_tags qt JOIN tags tg ON tg.id = qt.tag_id WHERE qt.question_id = q.id),
+        '{}'
+    )            AS tags
+FROM questions q
+JOIN subjects  s  ON q.subject_id   = s.id
+LEFT JOIN chapters  ch ON q.chapter_id  = ch.id
+LEFT JOIN topics     t  ON q.topic_id    = t.id
+LEFT JOIN subtopics  st ON q.subtopic_id = st.id
+WHERE q.is_active = TRUE AND q.deleted_at IS NULL;
+
+-- User dashboard view
+CREATE VIEW user_dashboard AS
+SELECT
+    up.id,
+    up.full_name,
+    up.preferred_lang,
+    up.streak_days,
+    up.total_questions_attempted,
+    up.total_correct,
+    CASE WHEN up.total_questions_attempted > 0
+         THEN ROUND((up.total_correct::decimal / up.total_questions_attempted) * 100, 1)
+         ELSE 0 END                          AS overall_accuracy,
+    us.current_streak,
+    us.longest_streak,
+    us.total_xp,
+    us.level,
+    us.badges,
+    e.code                                   AS target_exam,
+    sub.status                               AS subscription_status,
+    pl.code                                  AS plan_code
+FROM user_profiles up
+LEFT JOIN user_streaks   us  ON us.user_id   = up.id
+LEFT JOIN exams          e   ON e.id         = up.target_exam_id
+LEFT JOIN subscriptions  sub ON sub.user_id  = up.id AND sub.status = 'active'
+LEFT JOIN plans          pl  ON pl.id        = sub.plan_id;
+
+
+-- =============================================================================
+-- MIGRATION HELPER — Import your existing JSON questions
+-- =============================================================================
+-- Use this function to upsert questions from your extracted JSON
+-- Call it from your Python/Node.js pipeline with the question data
+
+CREATE OR REPLACE FUNCTION upsert_question(q JSONB)
+RETURNS UUID AS $$
+DECLARE
+    v_id            UUID;
+    v_subject_id    UUID;
+    v_chapter_id    UUID;
+    v_topic_id      UUID;
+    v_subtopic_id   UUID;
+    v_session_id    UUID;
+BEGIN
+    -- Resolve FKs from slugs/codes (assumes taxonomy is pre-seeded)
+    SELECT id INTO v_subject_id FROM subjects
+    WHERE code = q->>'subject' LIMIT 1;
+
+    SELECT id INTO v_chapter_id FROM chapters
+    WHERE slug = q->>'chapter' AND subject_id = v_subject_id LIMIT 1;
+
+    SELECT id INTO v_topic_id FROM topics
+    WHERE slug = q->>'topic' AND chapter_id = v_chapter_id LIMIT 1;
+
+    SELECT id INTO v_subtopic_id FROM subtopics
+    WHERE slug = q->>'subtopic' AND topic_id = v_topic_id LIMIT 1;
+
+    SELECT es.id INTO v_session_id
+    FROM exam_sessions es
+    JOIN exam_papers ep ON ep.id = es.exam_paper_id
+    JOIN exams e ON e.id = ep.exam_id
+    WHERE e.code = 'UPTET'
+      AND ep.paper_number = (q->>'paper')::SMALLINT
+      AND es.year = (q->>'source_year')::SMALLINT
+    LIMIT 1;
+
+    INSERT INTO questions (
+        legacy_id, exam_session_id, subject_id, chapter_id, topic_id, subtopic_id,
+        exam_code, paper_number, source_year, subject_code, chapter_slug, topic_slug, subtopic_slug,
+        question_hi, question_en, options, correct_option,
+        difficulty, bloom_level, question_type, is_pyq, is_verified
+    ) VALUES (
+        q->>'id', v_session_id, v_subject_id, v_chapter_id, v_topic_id, v_subtopic_id,
+        'UPTET', (q->>'paper')::SMALLINT, (q->>'source_year')::SMALLINT,
+        q->>'subject', q->>'chapter', q->>'topic', q->>'subtopic',
+        q->>'question_hi', q->>'question_en', q->'options', q->>'correct',
+        COALESCE(q->>'difficulty','medium'),
+        COALESCE(q->>'bloom_level','remember'),
+        COALESCE(q->>'question_type','factual'),
+        COALESCE((q->>'is_pyq')::BOOLEAN, TRUE),
+        COALESCE((q->>'verified')::BOOLEAN, FALSE)
+    )
+    ON CONFLICT (legacy_id) DO UPDATE SET
+        question_hi   = EXCLUDED.question_hi,
+        question_en   = EXCLUDED.question_en,
+        options       = EXCLUDED.options,
+        correct_option = EXCLUDED.correct_option,
+        difficulty    = EXCLUDED.difficulty,
+        bloom_level   = EXCLUDED.bloom_level,
+        updated_at    = NOW()
+    RETURNING id INTO v_id;
+
+    RETURN v_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =============================================================================
+-- REFRESH MATERIALIZED VIEW (run nightly via pg_cron or Supabase Edge Function)
+-- =============================================================================
+-- SELECT cron.schedule('refresh-topic-freq', '0 2 * * *', 'REFRESH MATERIALIZED VIEW CONCURRENTLY topic_frequency');
+-- SELECT cron.schedule('compute-accuracy',   '0 3 * * *',
+--   'UPDATE questions SET accuracy_pct = ROUND(correct_count::decimal/NULLIF(attempt_count,0)*100,2)
+--    WHERE attempt_count > 0');
+
+-- =============================================================================
+-- END OF SCHEMA
+-- Tables: 35   |  Views: 3   |  Indexes: 25+  |  Triggers: 5   |  Partitioned: 2
+-- =============================================================================

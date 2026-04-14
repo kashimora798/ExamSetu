@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPTET Practice — Redesigned</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1c1a14;
+  --ink2: #3d3a2e;
+  --ink3: #7a7560;
+  --gold: #c8860a;
+  --gold-light: #fdf3e0;
+  --gold-mid: #f5c842;
+  --teal: #0f6b5e;
+  --teal-light: #e0f2ef;
+  --red: #c0392b;
+  --red-light: #fdf0ee;
+  --green: #2d7a3a;
+  --green-light: #e8f5eb;
+  --blue: #1a4b8c;
+  --blue-light: #e8eef8;
+  --bg: #faf9f5;
+  --surface: #fff;
+  --border: #e8e4d8;
+  --border2: #f0ece2;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', 'Noto Sans Devanagari', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  background: var(--ink);
+  padding: 14px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-title { color: #fff; font-size: 15px; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.streak-badge {
+  background: var(--gold);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.countdown {
+  color: rgba(255,255,255,0.6);
+  font-size: 11px;
+  text-align: right;
+  line-height: 1.3;
+}
+.countdown strong { color: #fbbf24; display: block; font-size: 13px; }
+
+/* ── TODAY CARD ── */
+.today-section { padding: 16px 16px 0; }
+.today-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink3);
+  margin-bottom: 10px;
+}
+
+.today-card {
+  background: var(--ink);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.today-card::before {
+  content: '';
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 100px; height: 100px;
+  background: var(--gold);
+  opacity: .12;
+  border-radius: 50%;
+}
+.today-exam-badge {
+  display: inline-block;
+  background: rgba(200,134,10,.2);
+  color: var(--gold-mid);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  letter-spacing: .05em;
+}
+.today-card h3 {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  font-family: 'Noto Sans Devanagari', sans-serif;
+}
+.today-card p {
+  color: rgba(255,255,255,.55);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.today-meta {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.today-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255,255,255,.6);
+  font-size: 12px;
+}
+.today-meta-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.today-progress-bar {
+  background: rgba(255,255,255,.1);
+  border-radius: 4px;
+  height: 4px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.today-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), #f59e0b);
+  border-radius: 4px;
+  width: 35%;
+  transition: width .5s ease;
+}
+.today-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gold);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  font-family: 'Noto Sans Devanagari', sans-serif;
+}
+.today-btn span { font-size: 16px; }
+
+/* ── QUICK STATS ── */
+.quick-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-num { font-size: 18px; font-weight: 700; color: var(--ink); }
+.stat-lbl { font-size: 10px; color: var(--ink3); margin-top: 2px; line-height: 1.3; }
+
+/* ── SECTION HEADER ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 16px 10px;
+}
+.section-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.section-link { font-size: 12px; color: var(--gold); font-weight: 500; cursor: pointer; }
+
+/* ── SUBJECT TABS ── */
+.subject-scroll {
+  overflow-x: auto;
+  padding: 0 16px 10px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.subject-scroll::-webkit-scrollbar { display: none; }
+.subject-tabs { display: flex; gap: 6px; width: max-content; }
+
+.subj-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--ink2);
+  white-space: nowrap;
+  font-family: 'Noto Sans Devanagari', sans-serif;
+  transition: all .15s;
+  position: relative;
+}
+.subj-tab.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.subj-tab .subj-pct {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 10px;
+}
+.subj-tab.active .subj-pct { background: rgba(255,255,255,.2); color: rgba(255,255,255,.9); }
+.subj-tab:not(.active) .subj-pct { background: var(--green-light); color: var(--green); }
+
+/* ── CHAPTER LIST ── */
+.chapter-list { padding: 0 16px 80px; }
+
+.chapter-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: box-shadow .2s;
+}
+.chapter-card.active-chapter { border-color: var(--gold); }
+.chapter-card.completed { border-color: var(--green); }
+
+.chapter-header {
+  display: flex;
+  align-items: center;
+  padding: 13px 14px;
+  cursor: pointer;
+  gap: 12px;
+}
+
+.ch-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ch-num.done { background: var(--green); color: #fff; }
+.ch-num.current { background: var(--gold); color: #fff; }
+.ch-num.locked { background: var(--border2); color: var(--ink3); }
+.ch-num.available { background: var(--blue-light); color: var(--blue); }
+
+.ch-info { flex: 1; min-width: 0; }
+.ch-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+  font-family: 'Noto Sans Devanagari', sans-serif;
+}
+.ch-sub {
+  font-size: 11px;
+  color: var(--ink3);
+  margin-top: 2px;
+}
+
+.ch-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ch-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.ch-badge.done { background: var(--green-light); color: var(--green); }
+.ch-badge.current { background: var(--gold-light); color: var(--gold); }
+.ch-badge.locked { background: var(--border2); color: var(--ink3); }
+.ch-badge.pyq { background: var(--blue-light); color: var(--blue); }
+.ch-arrow { color: var(--ink3); font-size: 13px; transition: transform .2s; }
+.chapter-card.open .ch-arrow { transform: rotate(180deg); }
+
+.ch-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.ch-prog-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--border2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ch-prog-fill { height: 100%; border-radius: 4px; }
+.fill-green { background: var(--green); }
+.fill-gold { background: var(--gold); }
+.fill-blue { background: var(--blue); }
+.ch-prog-txt { font-size: 10px; color: var(--ink3); font-weight: 600; white-space: nowrap; }
+
+/* ── TOPICS INSIDE CHAPTER ── */
+.topic-list {
+  border-top: 1px solid var(--border2);
+  display: none;
+  padding: 4px 0 8px;
+}
+.chapter-card.open .topic-list { display: block; }
+
+.topic-row {
+  display: flex;
+  align-items: center;
+  padding: 9px 14px 9px 20px;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  margin: 0 6px;
+  transition: background .1s;
+}
+.topic-row:hover { background: var(--bg); }
+.topic-row.active-topic { background: var(--gold-light); }
+
+.topic-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.topic-icon.done { background: var(--green); color: #fff; }
+.topic-icon.current { background: var(--gold); color: #fff; font-size: 9px; }
+.topic-icon.next { background: var(--border2); color: var(--ink3); }
+.topic-icon.weak { background: var(--red-light); color: var(--red); }
+
+.topic-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.topic-row.active-topic .topic-text { font-weight: 600; }
+
+.topic-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topic-q-count { font-size: 10px; color: var(--ink3); }
+.topic-accuracy {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+.topic-accuracy.good { background: var(--green-light); color: var(--green); }
+.topic-accuracy.weak { background: var(--red-light); color: var(--red); }
+.topic-accuracy.mid { background: var(--gold-light); color: var(--gold); }
+
+.start-topic-btn {
+  background: var(--gold);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Noto Sans Devanagari', sans-serif;
+}
+.continue-topic-btn {
+  background: var(--teal-light);
+  color: var(--teal);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── WEAK ALERT ── */
+.weak-alert {
+  margin: 0 16px 8px;
+  background: var(--red-light);
+  border: 1px solid #f5c6c2;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.weak-alert-icon { font-size: 16px; }
+.weak-alert-text { flex: 1; }
+.weak-alert-title { font-size: 12px; font-weight: 600; color: var(--red); }
+.weak-alert-sub { font-size: 11px; color: #a93226; margin-top: 1px; }
+.weak-alert-btn {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── CHAPTER DIVIDER LABEL ── */
+.ch-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 8px;
+}
+.ch-divider-line { flex: 1; height: 1px; background: var(--border); }
+.ch-divider-text { font-size: 10px; font-weight: 600; color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding: 8px 0 12px;
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.nav-icon { font-size: 20px; }
+.nav-label { font-size: 10px; color: var(--ink3); font-weight: 500; }
+.nav-item.active .nav-icon { filter: none; }
+.nav-item.active .nav-label { color: var(--gold); font-weight: 600; }
+
+/* ── SYLLABUS COMPLETION BANNER ── */
+.completion-banner {
+  margin: 8px 16px;
+  background: linear-gradient(135deg, var(--teal) 0%, #1a6b5e 100%);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.completion-ring {
+  width: 44px; height: 44px;
+  flex-shrink: 0;
+  position: relative;
+}
+.completion-ring svg { width: 44px; height: 44px; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: rgba(255,255,255,.2); stroke-width: 3; }
+.ring-fill { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 113; stroke-dashoffset: 56; }
+.ring-text {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+.completion-text { flex: 1; }
+.completion-title { color: #fff; font-size: 13px; font-weight: 600; line-height: 1.3; font-family: 'Noto Sans Devanagari', sans-serif; }
+.completion-sub { color: rgba(255,255,255,.7); font-size: 11px; margin-top: 2px; }
+
+/* ── ANIMATIONS ── */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+.pulse { animation: pulse 2s infinite; }
+
+.topic-list { animation: slideDown .2s ease; }
+@keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-title">📚 अभ्यास करें</div>
+  <div class="topbar-right">
+    <div class="streak-badge">🔥 12</div>
+    <div class="countdown">
+      परीक्षा में
+      <strong>96 दिन</strong>
+    </div>
+  </div>
+</div>
+
+<!-- TODAY CARD -->
+<div class="today-section">
+  <div class="today-label">⚡ आज का अभ्यास</div>
+  <div class="today-card">
+    <div class="today-exam-badge">CDP · अध्याय 3</div>
+    <h3>अधिगम — Learning</h3>
+    <p>आपने पिछली बार 35% पूरा किया था — आज बाकी खत्म करें</p>
+    <div class="today-meta">
+      <div class="today-meta-item"><div class="today-meta-dot"></div>15 प्रश्न बाकी</div>
+      <div class="today-meta-item"><div class="today-meta-dot" style="background:#60a5fa"></div>~12 मिनट</div>
+      <div class="today-meta-item"><div class="today-meta-dot" style="background:#34d399"></div>2017, 2019 PYQ</div>
+    </div>
+    <div class="today-progress-bar">
+      <div class="today-progress-fill"></div>
+    </div>
+    <button class="today-btn">
+      जारी रखें — Theories of Learning
+      <span>→</span>
+    </button>
+  </div>
+</div>
+
+<!-- QUICK STATS -->
+<div class="quick-stats">
+  <div class="stat-card">
+    <div class="stat-num">68%</div>
+    <div class="stat-lbl">कुल accuracy</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">247</div>
+    <div class="stat-lbl">प्रश्न हल किये</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num">4/10</div>
+    <div class="stat-lbl">अध्याय पूरे</div>
+  </div>
+</div>
+
+<!-- SUBJECT TABS -->
+<div class="section-header">
+  <div class="section-title">विषय चुनें</div>
+  <div class="section-link">सभी देखें →</div>
+</div>
+<div class="subject-scroll">
+  <div class="subject-tabs">
+    <div class="subj-tab active" onclick="switchSubject(this, 'cdp')">
+      बाल विकास <span class="subj-pct">42%</span>
+    </div>
+    <div class="subj-tab" onclick="switchSubject(this, 'hindi')">
+      हिंदी <span class="subj-pct">28%</span>
+    </div>
+    <div class="subj-tab" onclick="switchSubject(this, 'english')">
+      English <span class="subj-pct">55%</span>
+    </div>
+    <div class="subj-tab" onclick="switchSubject(this, 'maths')">
+      गणित <span class="subj-pct">19%</span>
+    </div>
+    <div class="subj-tab" onclick="switchSubject(this, 'evs')">
+      पर्यावरण <span class="subj-pct">8%</span>
+    </div>
+  </div>
+</div>
+
+<!-- WEAK TOPIC ALERT -->
+<div class="weak-alert">
+  <div class="weak-alert-icon">⚠️</div>
+  <div class="weak-alert-text">
+    <div class="weak-alert-title">कमज़ोर विषय मिला</div>
+    <div class="weak-alert-sub">बुद्धि — IQ Levels में सिर्फ 31% accuracy</div>
+  </div>
+  <button class="weak-alert-btn">अभ्यास करें</button>
+</div>
+
+<!-- SUBJECT COMPLETION BANNER -->
+<div class="completion-banner">
+  <div class="completion-ring">
+    <svg viewBox="0 0 44 44">
+      <circle class="ring-bg" cx="22" cy="22" r="18"/>
+      <circle class="ring-fill" cx="22" cy="22" r="18"/>
+    </svg>
+    <div class="ring-text">42%</div>
+  </div>
+  <div class="completion-text">
+    <div class="completion-title">बाल विकास एवं शिक्षण विधि</div>
+    <div class="completion-sub">4 अध्याय पूरे · 6 बाकी · 247/590 प्रश्न</div>
+  </div>
+</div>
+
+<!-- CHAPTER LIST -->
+<div class="chapter-list" id="chapterList">
+
+  <div class="ch-divider">
+    <div class="ch-divider-line"></div>
+    <div class="ch-divider-text">✓ पूरे किये गये अध्याय</div>
+    <div class="ch-divider-line"></div>
+  </div>
+
+  <!-- Chapter 1 — DONE -->
+  <div class="chapter-card completed" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num done">✓</div>
+      <div class="ch-info">
+        <div class="ch-name">बाल विकास</div>
+        <div class="ch-sub">Child Development · 8 topics</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge done">पूरा हुआ</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-green" style="width:100%"></div></div>
+      <div class="ch-prog-txt" style="color:var(--green)">78% accuracy</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Growth and Development</div>
+        <div class="topic-meta"><div class="topic-accuracy good">82%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Principles of Development</div>
+        <div class="topic-meta"><div class="topic-accuracy good">75%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Heredity and Environment</div>
+        <div class="topic-meta"><div class="topic-accuracy mid">61%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Stages of Development</div>
+        <div class="topic-meta"><div class="topic-accuracy good">80%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chapter 2 — DONE -->
+  <div class="chapter-card completed" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num done">✓</div>
+      <div class="ch-info">
+        <div class="ch-name">संज्ञानात्मक विकास</div>
+        <div class="ch-sub">Cognitive Development · 6 topics</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge done">पूरा हुआ</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-green" style="width:100%"></div></div>
+      <div class="ch-prog-txt" style="color:var(--green)">71% accuracy</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Piaget's Theory</div>
+        <div class="topic-meta"><span class="topic-q-count">8 Q</span><div class="topic-accuracy good">75%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Vygotsky's Theory</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span><div class="topic-accuracy mid">65%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Kohlberg's Moral Development</div>
+        <div class="topic-meta"><span class="topic-q-count">4 Q</span><div class="topic-accuracy good">70%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ch-divider">
+    <div class="ch-divider-line"></div>
+    <div class="ch-divider-text pulse" style="color:var(--gold)">▶ अभी यहाँ हैं</div>
+    <div class="ch-divider-line"></div>
+  </div>
+
+  <!-- Chapter 3 — IN PROGRESS (open by default) -->
+  <div class="chapter-card active-chapter open" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num current">3</div>
+      <div class="ch-info">
+        <div class="ch-name">अधिगम (Learning)</div>
+        <div class="ch-sub">9 topics · सबसे ज़्यादा PYQ प्रश्न</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge current">जारी है</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-gold" style="width:35%"></div></div>
+      <div class="ch-prog-txt">35% · 5/14 topics</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Definition of Learning</div>
+        <div class="topic-meta"><span class="topic-q-count">3 Q</span><div class="topic-accuracy good">80%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Classical Conditioning (Pavlov)</div>
+        <div class="topic-meta"><span class="topic-q-count">6 Q</span><div class="topic-accuracy good">83%</div></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon done">✓</div>
+        <div class="topic-text">Operant Conditioning (Skinner)</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span><div class="topic-accuracy mid">60%</div></div>
+      </div>
+      <div class="topic-row active-topic" onclick="event.stopPropagation()">
+        <div class="topic-icon current">▶</div>
+        <div class="topic-text">Theories of Learning</div>
+        <div class="topic-meta"><span class="topic-q-count">12 Q</span><button class="continue-topic-btn">जारी रखें</button></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">4</div>
+        <div class="topic-text">Trial and Error (Thorndike)</div>
+        <div class="topic-meta"><span class="topic-q-count">7 Q</span><button class="start-topic-btn">शुरू करें</button></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">5</div>
+        <div class="topic-text">Insight Learning (Kohler)</div>
+        <div class="topic-meta"><span class="topic-q-count">4 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">6</div>
+        <div class="topic-text">Transfer of Learning</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon weak">!</div>
+        <div class="topic-text">Laws of Learning</div>
+        <div class="topic-meta"><span class="topic-q-count">8 Q</span><div class="topic-accuracy weak">31%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ch-divider">
+    <div class="ch-divider-line"></div>
+    <div class="ch-divider-text">आगे के अध्याय</div>
+    <div class="ch-divider-line"></div>
+  </div>
+
+  <!-- Chapter 4 — AVAILABLE -->
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">4</div>
+      <div class="ch-info">
+        <div class="ch-name">बुद्धि (Intelligence)</div>
+        <div class="ch-sub">7 topics · हर साल 4-5 प्रश्न</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge pyq">📌 ज़रूरी</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-blue" style="width:0%"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">Theories of Intelligence</div>
+        <div class="topic-meta"><span class="topic-q-count">8 Q</span><button class="start-topic-btn">शुरू करें</button></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">2</div>
+        <div class="topic-text">Two Factor Theory (Spearman)</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">3</div>
+        <div class="topic-text">Multiple Intelligences (Gardner)</div>
+        <div class="topic-meta"><span class="topic-q-count">4 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">4</div>
+        <div class="topic-text">IQ Levels and Classification</div>
+        <div class="topic-meta"><span class="topic-q-count">6 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chapter 5 — AVAILABLE -->
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">5</div>
+      <div class="ch-info">
+        <div class="ch-name">व्यक्तित्व (Personality)</div>
+        <div class="ch-sub">5 topics</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge pyq">📌 ज़रूरी</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-blue" style="width:0%"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">Theories of Personality</div>
+        <div class="topic-meta"><span class="topic-q-count">6 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">2</div>
+        <div class="topic-text">Types of Personality</div>
+        <div class="topic-meta"><span class="topic-q-count">4 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">3</div>
+        <div class="topic-text">Freud's Psychoanalytic Theory</div>
+        <div class="topic-meta"><span class="topic-q-count">3 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chapter 6 - 10: locked-looking but available -->
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">6</div>
+      <div class="ch-info">
+        <div class="ch-name">अभिप्रेरणा (Motivation)</div>
+        <div class="ch-sub">5 topics · Maslow, McDougall</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill fill-blue" style="width:0%"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">Types of Motivation</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">2</div>
+        <div class="topic-text">Maslow's Hierarchy of Needs</div>
+        <div class="topic-meta"><span class="topic-q-count">6 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">7</div>
+      <div class="ch-info">
+        <div class="ch-name">वैयक्तिक भिन्नता</div>
+        <div class="ch-sub">Individual Differences · 4 topics</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill" style="width:0%;background:var(--blue)"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">Gifted Children</div>
+        <div class="topic-meta"><span class="topic-q-count">3 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">8</div>
+      <div class="ch-info">
+        <div class="ch-name">समावेशी शिक्षा</div>
+        <div class="ch-sub">Inclusive Education · RTE 2009 · NCF 2005</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge pyq" style="background:#fdf3e0;color:var(--gold)">🔥 हर साल</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill" style="width:0%;background:var(--blue)"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">RTE Act 2009</div>
+        <div class="topic-meta"><span class="topic-q-count">8 Q</span><button class="start-topic-btn">शुरू करें</button></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">2</div>
+        <div class="topic-text">NCF 2005</div>
+        <div class="topic-meta"><span class="topic-q-count">6 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">9</div>
+      <div class="ch-info">
+        <div class="ch-name">मूल्यांकन</div>
+        <div class="ch-sub">Assessment & Evaluation · 5 topics</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill" style="width:0%;background:var(--blue)"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">CCE — Continuous & Comprehensive Evaluation</div>
+        <div class="topic-meta"><span class="topic-q-count">5 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-card" onclick="toggleChapter(this)">
+    <div class="chapter-header">
+      <div class="ch-num available">10</div>
+      <div class="ch-info">
+        <div class="ch-name">शिक्षण विधियाँ</div>
+        <div class="ch-sub">Teaching Methods · Herbart, Bloom</div>
+      </div>
+      <div class="ch-right">
+        <div class="ch-badge pyq" style="background:#fdf3e0;color:var(--gold)">🔥 हर साल</div>
+        <div class="ch-arrow">▾</div>
+      </div>
+    </div>
+    <div class="ch-progress-row">
+      <div class="ch-prog-bar"><div class="ch-prog-fill" style="width:0%;background:var(--blue)"></div></div>
+      <div class="ch-prog-txt">शुरू नहीं हुआ</div>
+    </div>
+    <div class="topic-list">
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">1</div>
+        <div class="topic-text">Lesson Planning (Herbart Five Steps)</div>
+        <div class="topic-meta"><span class="topic-q-count">4 Q</span></div>
+      </div>
+      <div class="topic-row" onclick="event.stopPropagation()">
+        <div class="topic-icon next">2</div>
+        <div class="topic-text">Brainstorming Model</div>
+        <div class="topic-meta"><span class="topic-q-count">3 Q</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-item">
+    <div class="nav-icon">🏠</div>
+    <div class="nav-label">होम</div>
+  </div>
+  <div class="nav-item active">
+    <div class="nav-icon">📖</div>
+    <div class="nav-label" style="color:var(--gold)">अभ्यास</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">📝</div>
+    <div class="nav-label">Mock Test</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">🔖</div>
+    <div class="nav-label">Bookmarks</div>
+  </div>
+  <div class="nav-item">
+    <div class="nav-icon">👤</div>
+    <div class="nav-label">प्रोफ़ाइल</div>
+  </div>
+</div>
+
+<script>
+function toggleChapter(card) {
+  const isOpen = card.classList.contains('open');
+  card.classList.toggle('open', !isOpen);
+}
+
+function switchSubject(el, subj) {
+  document.querySelectorAll('.subj-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // In real app: reload chapters for that subject
+}
+</script>
+</body>
+</html>

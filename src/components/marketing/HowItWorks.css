@@ -1,0 +1,118 @@
+/* ── How It Works Section ── */
+.hiw-header {
+  text-align: center;
+  margin-bottom: var(--space-12);
+}
+
+.hiw-header h2 {
+  margin-bottom: var(--space-3);
+}
+
+.hiw-header p {
+  color: var(--muted);
+  font-size: var(--text-lg);
+}
+
+.hiw-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-8);
+  position: relative;
+}
+
+.hiw-step {
+  position: relative;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hiw-step-icon {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light);
+  color: var(--primary);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-2);
+  transition: all 0.3s var(--ease-out);
+}
+
+.hiw-step:hover .hiw-step-icon {
+  background: var(--primary);
+  color: white;
+  transform: scale(1.1);
+}
+
+.hiw-step-num {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gold);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--surface);
+}
+
+.hiw-step h3 {
+  font-size: var(--text-xl);
+}
+
+.hiw-step-hi {
+  font-size: var(--text-sm);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.hiw-step-desc {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  max-width: 250px;
+  line-height: 1.5;
+}
+
+/* Connector */
+.hiw-connector {
+  display: none;
+}
+
+.hiw-steps::after {
+  content: '';
+  position: absolute;
+  top: 36px;
+  left: calc(33.33% - 20px);
+  right: calc(33.33% - 20px);
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--border) 0,
+    var(--border) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  z-index: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hiw-steps {
+    grid-template-columns: 1fr;
+    gap: var(--space-10);
+  }
+
+  .hiw-steps::after {
+    display: none;
+  }
+}
