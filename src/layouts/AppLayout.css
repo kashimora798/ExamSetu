@@ -19,3 +19,11 @@
     padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }
+/* Touch devices: enforce mobile shell even if viewport width is reported large */
+@media (hover: none) and (pointer: coarse) {
+  .app-main {
+    margin-left: 0;
+    padding: var(--space-4);
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+}
