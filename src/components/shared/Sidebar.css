@@ -126,3 +126,10 @@
     display: none;
   }
 }
+
+/* Touch devices: hide sidebar even when reported width is larger */
+@media (hover: none) and (pointer: coarse) {
+  .sidebar {
+    display: none;
+  }
+}
