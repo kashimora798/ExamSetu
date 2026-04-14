@@ -39,3 +39,10 @@
     justify-content: space-around;
   }
 }
+* Touch devices: show bottom nav even if viewport width is reported large */
+@media (hover: none) and (pointer: coarse) {
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+  }
+}
