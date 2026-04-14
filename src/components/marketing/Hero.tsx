@@ -143,7 +143,7 @@ export default function Hero() {
           <div className="hero-launch-left">
             <span className="hero-launch-live-dot" aria-hidden="true" />
             <div>
-              <p className="hero-launch-title" lang="hi">Registration बिल्कुल FREE + Premium Access Live</p>
+              <p className="hero-launch-title" lang="hi">ExamSetu Offer: Registration बिल्कुल FREE + Premium Access Live</p>
               <p className="hero-launch-sub">Limited launch window: lock premium features now at no cost.</p>
             </div>
           </div>

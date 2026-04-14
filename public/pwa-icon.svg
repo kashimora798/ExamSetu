@@ -1,13 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ExamSetu">
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#1a6b5a"/>
-      <stop offset="100%" stop-color="#0f3460"/>
+    <radialGradient id="bg" cx="30%" cy="20%" r="85%">
+      <stop offset="0%" stop-color="#1F3348" />
+      <stop offset="100%" stop-color="#0B1826" />
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D3A03A" />
+      <stop offset="100%" stop-color="#B88718" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="120" fill="url(#bg)"/>
-  <circle cx="256" cy="190" r="110" fill="rgba(255,255,255,0.12)"/>
-  <text x="256" y="300" text-anchor="middle" font-family="Noto Sans, Arial, sans-serif" font-size="210" font-weight="700" fill="#ffffff">श</text>
-  <rect x="116" y="360" width="280" height="62" rx="31" fill="rgba(255,255,255,0.14)"/>
-  <text x="256" y="402" text-anchor="middle" font-family="Noto Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#ffffff">ExamSetu</text>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+
+  <circle cx="256" cy="256" r="164" fill="rgba(244,239,228,0.06)" />
+  <circle cx="256" cy="256" r="128" fill="rgba(244,239,228,0.08)" />
+
+  <path
+    d="M 168 352 L 168 190 A 88 88 0 0 0 344 190 L 344 352"
+    stroke="url(#gold)"
+    stroke-width="34"
+    fill="none"
+    stroke-linecap="round"
+  />
 </svg>
