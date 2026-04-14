@@ -93,7 +93,7 @@ export default function ContactPage() {
               <div className="contact-info-card card">
                 <Mail size={20} className="contact-info-icon" />
                 <h4>Email</h4>
-                <p>hello@shikshasetu.in</p>
+                <p>hello@examsetu.in</p>
               </div>
 
               <div className="contact-info-card card">

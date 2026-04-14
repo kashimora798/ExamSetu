@@ -44,7 +44,7 @@ export default function ProblemSolution() {
           {/* Arrow */}
           <div className="ps-arrow">
             <div className="ps-arrow-line" />
-            <span className="ps-arrow-text" lang="hi">शिक्षासेतु</span>
+            <span className="ps-arrow-text" lang="hi">ExamSetu</span>
           </div>
 
           {/* Solutions Column */}

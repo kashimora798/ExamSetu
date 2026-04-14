@@ -1,22 +1,22 @@
-/* ── Navbar Styles ── */
+/* Navbar */
 .navbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   height: var(--nav-height);
-  z-index: 1000;
-  background: rgba(247, 245, 240, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid transparent;
+  z-index: 1200;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   transition: all var(--duration) var(--ease-out);
 }
 
 .navbar-scrolled {
-  background: rgba(247, 245, 240, 0.95);
-  border-bottom-color: var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 6px 18px rgba(20, 26, 35, 0.08);
+}
+
+.navbar-open {
+  box-shadow: 0 8px 24px rgba(20, 26, 35, 0.12);
 }
 
 .navbar-inner {
@@ -69,7 +69,7 @@
   letter-spacing: 0.08em;
 }
 
-/* Nav Links */
+/* Desktop links */
 .navbar-links {
   display: flex;
   align-items: center;
@@ -86,17 +86,13 @@
   text-decoration: none;
 }
 
-.nav-link:hover {
-  color: var(--primary);
-  background: var(--primary-light);
-}
-
+.nav-link:hover,
 .nav-link.active {
   color: var(--primary);
   background: var(--primary-light);
 }
 
-/* Actions */
+/* Desktop actions */
 .navbar-actions {
   display: flex;
   align-items: center;
@@ -104,47 +100,83 @@
   flex-shrink: 0;
 }
 
-/* Mobile Toggle */
+/* Mobile toggle */
 .navbar-toggle {
   display: none;
   color: var(--ink);
   padding: var(--space-2);
+  border-radius: var(--radius-sm);
 }
 
-/* Mobile Drawer */
-.navbar-drawer {
+/* Overlay */
+.navbar-overlay {
   position: fixed;
-  top: var(--nav-height);
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg);
-  padding: var(--space-6);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(17, 24, 39, 0.32);
+  transition: opacity 0.24s var(--ease-out);
+  z-index: 1190;
+}
+
+.navbar-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Mobile drawer top-sheet */
+.navbar-drawer {
+  position: fixed;
+  top: calc(var(--nav-height) + 10px);
+  left: 12px;
+  right: 12px;
+  bottom: auto;
+  max-height: calc(100vh - var(--nav-height) - 24px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(28, 28, 30, 0.18);
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  transform: translateX(100%);
-  transition: transform 0.3s var(--ease-out);
-  z-index: 999;
+  gap: var(--space-4);
+  transform: translateY(-10px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s var(--ease-out), opacity 0.22s var(--ease-out);
+  z-index: 1195;
 }
 
 .navbar-drawer.open {
-  transform: translateX(0);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .drawer-links {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
 }
 
 .drawer-link {
-  padding: var(--space-4) var(--space-4);
+  padding: var(--space-3);
   color: var(--ink2);
-  font-size: var(--text-lg);
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: 600;
   border-radius: var(--radius-md);
   text-decoration: none;
+  text-align: center;
+  border: 1px solid var(--border);
+  background: #fbfaf7;
   transition: all var(--duration) var(--ease-out);
 }
 
@@ -152,16 +184,18 @@
 .drawer-link.active {
   color: var(--primary);
   background: var(--primary-light);
+  border-color: #b7d9d2;
 }
 
 .drawer-actions {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin-top: auto;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .navbar-links,
   .navbar-actions {
@@ -170,5 +204,21 @@
 
   .navbar-toggle {
     display: flex;
+  }
+
+  .logo-english {
+    display: none;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+@media (min-width: 769px) {
+  .navbar-overlay,
+  .navbar-drawer {
+    display: none;
   }
 }

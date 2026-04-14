@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ArrowLeft, User, Briefcase,
-  BookOpen, FileText, MessageCircle, CheckCircle, Sparkles,
+  FileText, MessageCircle, CheckCircle, Sparkles,
   GraduationCap, BookOpenCheck, Megaphone, Users, Globe,
   Play, Camera, Share2, Newspaper,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { Exam, ExamPaper } from '../../lib/types';
+import { trackEvent } from '../../lib/telemetry';
+import BrandLogo from '../../components/shared/BrandLogo';
 import './OnboardingPage.css';
 
 /* ── Step config ── */
@@ -88,6 +90,10 @@ export default function OnboardingPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    void trackEvent('onboarding_step_view', { step });
+  }, [step]);
+
   /* Navigation */
   function goNext() {
     if (step < TOTAL_STEPS) {
@@ -133,6 +139,13 @@ export default function OnboardingPage() {
       .eq('id', user.id);
 
     if (!error) {
+      void trackEvent('onboarding_complete', {
+        profession,
+        source,
+        examId,
+        paperNum,
+        has_phone: Boolean(phone.trim()),
+      }, user.id);
       await refreshProfile();
       setDirection('forward');
       setStep(TOTAL_STEPS + 1); // Show celebration
@@ -154,10 +167,7 @@ export default function OnboardingPage() {
       <div className="onboard-container">
         {/* Logo */}
         <div className="onboard-logo">
-          <div className="onboard-logo-icon">
-            <BookOpen size={20} strokeWidth={2.5} />
-          </div>
-          <span lang="hi">शिक्षासेतु</span>
+          <BrandLogo tone="light" size="md" />
         </div>
 
         {/* Progress bar */}

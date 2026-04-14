@@ -1,0 +1,8 @@
+queation pallet in mock test should be also devided into subject wise 
+
+is there any specific reason that i cannot change the once selected option in mock test?
+
+SOME QUESTIONS IN MATHS HAS THE IMAGE QUESTION ADD THE DB CHANGES MIGRATION TO SUPPORT THE IMAGES WITH THE QUE4STIONS AND UI FOR SHOWING QUESTION AND CAN WE USE LATEX FOR THE  MATHS QUESTION AND OPTIONS MATHS FORMATING ? CAN IT AUTO FORMAT AS NOW THE QUESTIONS ARE IN THE DB , CAN IT AUTO METTLICLY IDENTIOFY AND FORMAT  ??
+
+there should a more detailed breakdown of the result in the result of mock test subject wise and other important matrixes ... a diffrent result page for mock test result , deside the attrix you can show 
+S

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, BookOpen, LayoutDashboard } from 'lucide-react';
+import { Menu, X, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import BrandLogo from './BrandLogo';
 import './Navbar.css';
 
 const navLinks = [
@@ -27,18 +28,29 @@ export default function Navbar() {
     setIsOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isOpen]);
+
   return (
-    <nav className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`} id="main-navbar">
+    <nav className={`navbar ${scrolled ? 'navbar-scrolled' : ''} ${isOpen ? 'navbar-open' : ''}`} id="main-navbar">
       <div className="navbar-inner container">
         {/* Logo */}
         <Link to="/" className="navbar-logo" id="logo-link">
-          <div className="logo-icon">
-            <BookOpen size={24} strokeWidth={2.5} />
-          </div>
-          <div className="logo-text">
-            <span className="logo-hindi" lang="hi">शिक्षासेतु</span>
-            <span className="logo-english">UPTET Saathi</span>
-          </div>
+          <BrandLogo tone="light" size="md" />
         </Link>
 
         {/* Desktop Nav Links */}
@@ -86,6 +98,12 @@ export default function Navbar() {
       </div>
 
       {/* Mobile Drawer */}
+      <button
+        className={`navbar-overlay ${isOpen ? 'open' : ''}`}
+        onClick={() => setIsOpen(false)}
+        aria-label="Close menu overlay"
+      />
+
       <div className={`navbar-drawer ${isOpen ? 'open' : ''}`}>
         <div className="drawer-links">
           {navLinks.map((link) => (

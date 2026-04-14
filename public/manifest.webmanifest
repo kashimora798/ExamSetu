@@ -1,0 +1,19 @@
+{
+  "name": "ExamSetu — UPTET Saathi",
+  "short_name": "ExamSetu",
+  "description": "UPTET preparation with mock tests, PYQ practice, analytics, and branded share cards.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f5f0",
+  "theme_color": "#1a6b5a",
+  "lang": "hi",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

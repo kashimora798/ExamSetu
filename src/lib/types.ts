@@ -1,4 +1,4 @@
-/* ── Core database types for ShikshaSetu ── */
+/* ── Core database types for ExamSetu ── */
 
 export interface Exam {
   id: string;
@@ -93,7 +93,7 @@ export interface UserProfile {
 export interface PracticeSession {
   id: string;
   user_id: string;
-  session_type: 'topic_practice' | 'mock_test' | 'pyq_paper' | 'revision' | 'challenge' | 'custom';
+  session_type: 'topic_practice' | 'chapter_practice' | 'mock_test' | 'pyq_paper' | 'revision' | 'challenge' | 'custom';
   filters: Record<string, unknown>;
   total_questions: number;
   time_limit_secs: number | null;
@@ -147,3 +147,19 @@ export interface Bookmark {
   note: string | null;
   created_at: string;
 }
+
+export interface UserChapterStat {
+  user_id: string;
+  chapter_id: string;
+  attempts: number;
+  correct: number;
+  accuracy_pct: number | null;
+  topics_completed: number;
+  total_topics: number;
+  completion_pct: number | null;
+  last_attempted: string | null;
+  updated_at: string;
+}
+
+/** Content source selection for practice sessions */
+export type ContentSource = 'pyq' | 'mock' | 'mixed';

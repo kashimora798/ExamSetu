@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { Question } from '../types';
 
-export type SessionMode = 'topic_practice' | 'mock_test' | 'pyq_paper' | 'revision' | 'challenge' | 'weak_mix';
+export type SessionMode = 'topic_practice' | 'chapter_practice' | 'mock_test' | 'pyq_paper' | 'revision' | 'challenge' | 'weak_mix';
 
 export interface SelectorOptions {
   limit?: number;
@@ -11,6 +11,7 @@ export interface SelectorOptions {
   sourceYear?: number;
   paperNumber?: number;
   difficulty?: 'easy' | 'medium' | 'hard' | 'mixed';
+ contentSource?: 'pyq' | 'mock' | 'mixed';
 }
 
 // ─── Priority scores for spaced repetition ─────────────────────────────────
@@ -36,19 +37,21 @@ export async function fetchQuestionsForSession(
 
   switch (mode) {
     // ── Topic Practice: spaced-rep prioritized ───────────────────────────
-    case 'topic_practice': {
-      // Fetch questions with user's last attempt for SRS scoring
+    case 'topic_practice':
+    case 'chapter_practice': {
       let query = supabase
         .from('questions')
         .select('*')
         .eq('is_active', true);
 
-      if (options.topicId)   query = query.eq('topic_id', options.topicId);
+      if (options.topicId) query = query.eq('topic_id', options.topicId);
       else if (options.chapterId) query = query.eq('chapter_id', options.chapterId);
       else if (options.subjectId) query = query.eq('subject_id', options.subjectId);
       if (options.difficulty && options.difficulty !== 'mixed') {
         query = query.eq('difficulty', options.difficulty);
       }
+      if (options.contentSource === 'pyq') query = query.eq('is_pyq', true);
+      if (options.contentSource === 'mock') query = query.eq('is_pyq', false);
 
       const { data: questions, error } = await query.limit(limit * 3);
       if (error) throw error;
@@ -97,7 +100,7 @@ export async function fetchQuestionsForSession(
         .eq('is_active', true);
       if (options.sourceYear)  query = query.eq('source_year', options.sourceYear);
       if (options.paperNumber) query = query.eq('paper_number', options.paperNumber);
-      const { data, error } = await query.order('question_order', { ascending: true }).limit(limit);
+      const { data, error } = await query.order('legacy_id', { ascending: true }).limit(limit);
       if (error) throw error;
       return (data || []) as Question[];
     }
@@ -146,24 +149,62 @@ export async function fetchQuestionsForSession(
 
     // ── Mock Test: structured by subject ────────────────────────────────
     case 'mock_test': {
-      // 150 questions: CDP 30 + Hindi 30 + English 30 + Maths 30 + EVS 30
-      const subjects = ['CDP', 'Hindi', 'English', 'Maths', 'EVS'];
+      // Default: CDP 30 + Hindi 30 + English 30 + Maths 30 + EVS 30 = 150
+      // For Quick Test: filter by specific subjectId or subjectCode
+      const perSubject = options.subjectId ? (options.limit || 30) : 30;
+      const subjectCodes = ['CDP', 'Hindi', 'English', 'Maths', 'EVS'];
       let allQuestions: any[] = [];
-      
-      for (const subjectCode of subjects) {
+
+      if (options.subjectId) {
+        // Quick Test: single subject
         const { data } = await supabase
           .from('questions')
           .select('*')
-          .eq('subject_code', subjectCode)
+          .eq('subject_id', options.subjectId)
           .eq('is_active', true)
-          .order('accuracy_pct', { ascending: true }) // harder questions first
-          .limit(30);
-        if (data) allQuestions.push(...data);
+          .limit(perSubject * 4); // pull more, then shuffle
+        if (data) allQuestions = data;
+      } else {
+        // Full mock: all 5 subjects
+        for (const code of subjectCodes) {
+          const { data } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('subject_code', code)
+            .eq('is_active', true)
+            .limit(perSubject * 3); // pull 3× then shuffle-select
+          if (data) allQuestions.push(...data);
+        }
       }
 
-      // Shuffle within each subject bucket but keep subject ordering
-      return allQuestions.slice(0, 150) as Question[];
+      // Fisher-Yates shuffle within each subject bucket to avoid always same questions
+      function shuffleArr<T>(arr: T[]): T[] {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      if (options.subjectId) {
+        return shuffleArr(allQuestions).slice(0, perSubject) as Question[];
+      }
+
+      // Group by subject_code, shuffle each group, take 30 per subject
+      const grouped = new Map<string, any[]>();
+      for (const q of allQuestions) {
+        const key = q.subject_code || 'other';
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key)!.push(q);
+      }
+      const result: any[] = [];
+      for (const code of subjectCodes) {
+        const bucket = shuffleArr(grouped.get(code) || []);
+        result.push(...bucket.slice(0, perSubject));
+      }
+      return result.slice(0, options.limit || 150) as Question[];
     }
+
 
     // ── Daily Challenge: 10 questions, date-seeded ───────────────────────
     case 'challenge': {

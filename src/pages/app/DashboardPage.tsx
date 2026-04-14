@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Flame, Target, TrendingUp, BookOpenCheck,
@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSubscription } from '../../hooks/useSubscription';
+import { useShareCard } from '../../hooks/useShareCard';
+import ShareCardTemplate from '../../components/shared/ShareCardTemplate';
+import SharePreviewModal from '../../components/shared/SharePreviewModal';
 import { supabase } from '../../lib/supabase';
 import './DashboardPage.css';
 
@@ -43,6 +46,8 @@ export default function DashboardPage() {
   const { profile, user } = useAuth();
   const { isFree } = useSubscription();
   const navigate = useNavigate();
+  const shareCardRef = useRef<HTMLDivElement>(null);
+  const { isSharing, shareElement, sharePreview, closeSharePreview, downloadSharePreview, sharePreviewNative } = useShareCard();
 
   const [stats, setStats] = useState<DashStats>({
     totalAttempted: 0, totalCorrect: 0, accuracy: 0,
@@ -54,6 +59,20 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Student';
+
+  const handleShareStreak = async () => {
+    await shareElement(shareCardRef.current, {
+      kind: 'streak',
+      userId: user?.id,
+      filename: 'uptet-streak-card.png',
+      title: 'My Study Streak',
+      payload: {
+        streak: stats.streak,
+        sessionsToday: stats.sessionsToday,
+        accuracy: stats.accuracy,
+      },
+    });
+  };
 
   useEffect(() => {
     if (user) loadDashboardData();
@@ -276,6 +295,10 @@ export default function DashboardPage() {
               <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.65)', fontWeight: 600, letterSpacing: '0.05em' }}>दिन streak</span>
             </div>
           </div>
+          <button onClick={handleShareStreak} disabled={loading || isSharing}
+            style={{ border: 'none', borderRadius: '999px', background: 'white', color: '#0f3460', fontWeight: 800, fontSize: '0.78rem', padding: '10px 16px', cursor: 'pointer', boxShadow: '0 8px 18px rgba(0,0,0,0.12)' }}>
+            Share Streak
+          </button>
         </div>
       </div>
 
@@ -293,6 +316,25 @@ export default function DashboardPage() {
               <s.icon size={22} color={s.color} />
             </div>
             <div>
+
+            <div style={{ position: 'fixed', left: '-9999px', top: 0, width: '420px', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
+              <div ref={shareCardRef}>
+                <ShareCardTemplate
+                  kind="streak"
+                  title="Study Streak"
+                  subtitle={`You have kept your learning alive for ${stats.streak} day${stats.streak === 1 ? '' : 's'}. Keep the chain going and turn consistency into rank.`}
+                  primaryValue={stats.streak}
+                  primaryLabel="Days of streak"
+                  brand="ExamSetu"
+                  footer={`Today: ${stats.sessionsToday} session${stats.sessionsToday === 1 ? '' : 's'} · Accuracy ${stats.accuracy}%`}
+                  detailRows={[
+                    { label: 'Sessions Today', value: String(stats.sessionsToday) },
+                    { label: 'Accuracy', value: `${stats.accuracy}%` },
+                    { label: 'Total Correct', value: String(stats.totalCorrect) },
+                  ]}
+                />
+              </div>
+            </div>
               {loading ? <Skeleton w="48px" h="28px" /> : <span className="dash-stat-value" style={{ color: s.color }}>{s.value}</span>}
               <span className="dash-stat-label" lang="hi">{s.label}</span>
               {s.sub && !loading && (
@@ -305,6 +347,16 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      <SharePreviewModal
+        open={sharePreview.open}
+        title={sharePreview.title}
+        text={sharePreview.text}
+        imageUrl={sharePreview.imageUrl}
+        onClose={closeSharePreview}
+        onDownload={downloadSharePreview}
+        onNativeShare={sharePreviewNative}
+      />
+
       {/* ── Quick Actions ── */}
       <div className="dash-section">
         <h3 lang="hi">🚀 आज क्या करें?</h3>
@@ -312,8 +364,8 @@ export default function DashboardPage() {
           <Link to="/practice" className="dash-action-card dash-action-primary" id="action-practice">
             <div className="dash-action-icon"><SlidersHorizontal size={24} /></div>
             <div>
-              <h4>Topic-wise Practice</h4>
-              <p lang="hi">विषय चुनें और अभ्यास शुरू करें</p>
+              <h4>Chapter Practice</h4>
+              <p lang="hi">अध्याय चुनें · PYQ / Mock / Mixed</p>
             </div>
             <ArrowRight size={18} className="dash-action-arrow" />
           </Link>
@@ -321,7 +373,7 @@ export default function DashboardPage() {
             <div className="dash-action-icon"><FileText size={24} /></div>
             <div>
               <h4>Mock Test</h4>
-              <p lang="hi">150 Qs · 2.5 hrs · Full exam simulation</p>
+              <p lang="hi">Full exam simulation</p>
             </div>
             <ArrowRight size={18} className="dash-action-arrow" />
           </Link>
@@ -329,7 +381,7 @@ export default function DashboardPage() {
             <div className="dash-action-icon"><Zap size={24} /></div>
             <div>
               <h4>Daily Challenge ⚡</h4>
-              <p lang="hi">10 प्रश्न · 10 मिनट · आज का challenge</p>
+              <p lang="hi">10 प्रश्न · आज का quick drill</p>
             </div>
             <ArrowRight size={18} className="dash-action-arrow" />
           </Link>

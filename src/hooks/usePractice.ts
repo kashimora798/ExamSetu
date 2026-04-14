@@ -40,12 +40,14 @@ export function usePractice() {
       }
 
       // 2. Create the practice session
+      const sessionType = filters.sessionType === 'weak_mix' ? 'custom' : (filters.sessionType || 'topic_practice');
+      const cleanFilters = Object.fromEntries(Object.entries({ ...filters, practiceMode: filters.sessionType || sessionType }).filter(([, v]) => v !== '' && v !== null && v !== undefined));
       const { data: session, error: sError } = await supabase
         .from('practice_sessions')
         .insert({
           user_id: user.id,
-          session_type: filters.sessionType || 'topic_practice',
-          filters: filters,
+          session_type: sessionType,
+          filters: cleanFilters,
           total_questions: questions.length,
           time_limit_secs: filters.isTimed ? (filters.timeLimitMins || 30) * 60 : null,
           status: 'in_progress',

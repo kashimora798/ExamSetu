@@ -1,8 +1,12 @@
+import { ToastProvider } from './hooks/useToast';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import MarketingLayout from './layouts/MarketingLayout';
 import AppLayout from './layouts/AppLayout';
 import ProtectedRoute from './components/shared/ProtectedRoute';
+import AppErrorBoundary from './components/shared/AppErrorBoundary';
+import TelemetryBootstrap from './components/shared/TelemetryBootstrap';
+import PWAInstallPrompt from './components/shared/PWAInstallPrompt';
 
 /* Marketing pages */
 import HomePage from './pages/marketing/HomePage';
@@ -25,12 +29,19 @@ import AnalyticsPage from './pages/app/AnalyticsPage';
 import BookmarksPage from './pages/app/BookmarksPage';
 import SettingsPage from './pages/app/SettingsPage';
 import OnboardingPage from './pages/app/OnboardingPage';
+import MockTestResultsPage from './pages/app/MockTestResultsPage';
+import GlobalLeaderboardPage from './pages/app/GlobalLeaderboardPage';
+import ReportsModerationPage from './pages/app/ReportsModerationPage';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
+      <AppErrorBoundary>
+        <AuthProvider>
+          <ToastProvider>
+          <TelemetryBootstrap />
+          <PWAInstallPrompt />
+          <Routes>
           {/* Marketing pages with Navbar + Footer */}
           <Route element={<MarketingLayout />}>
             <Route path="/" element={<HomePage />} />
@@ -68,13 +79,18 @@ export default function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/bookmarks" element={<BookmarksPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/leaderboard" element={<GlobalLeaderboardPage />} />
+            <Route path="/reports" element={<ReportsModerationPage />} />
           </Route>
 
           {/* Distraction-free standalone protected pages */}
           <Route path="/practice/:sessionId" element={<ProtectedRoute><PracticeSessionPage /></ProtectedRoute>} />
           <Route path="/results/:sessionId" element={<ProtectedRoute><PracticeResultsPage /></ProtectedRoute>} />
-        </Routes>
-      </AuthProvider>
+          <Route path="/mock-results/:sessionId" element={<ProtectedRoute><MockTestResultsPage /></ProtectedRoute>} />
+          </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </AppErrorBoundary>
     </BrowserRouter>
   );
 }

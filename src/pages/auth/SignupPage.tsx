@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { trackEvent } from '../../lib/telemetry';
+import BrandLogo from '../../components/shared/BrandLogo';
 import './AuthPages.css';
 
 export default function SignupPage() {
@@ -21,11 +23,14 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    void trackEvent('signup_magic_link_submit', { email_domain: email.split('@')[1] || null });
     const { error: err } = await signInWithMagicLink(email);
     if (err) {
       setError(err);
+      void trackEvent('signup_magic_link_error', { message: err, email_domain: email.split('@')[1] || null });
     } else {
       setSent(true);
+      void trackEvent('signup_magic_link_success', { email_domain: email.split('@')[1] || null });
     }
     setLoading(false);
   }
@@ -34,10 +39,7 @@ export default function SignupPage() {
     <div className="auth-page" id="signup-page">
       <div className="auth-card card-elevated">
         <Link to="/" className="auth-logo">
-          <div className="logo-icon">
-            <BookOpen size={22} strokeWidth={2.5} />
-          </div>
-          <span className="logo-hindi" lang="hi">शिक्षासेतु</span>
+          <BrandLogo tone="light" size="md" />
         </Link>
 
         <h2 lang="hi">तैयारी शुरू करें 🚀</h2>
@@ -53,7 +55,10 @@ export default function SignupPage() {
           </div>
         ) : (
           <>
-            <button className="btn auth-google-btn" id="google-signup-btn" onClick={signInWithGoogle}>
+            <button className="btn auth-google-btn" id="google-signup-btn" onClick={() => {
+              void trackEvent('signup_google_click');
+              void signInWithGoogle();
+            }}>
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

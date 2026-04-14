@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import './Footer.css';
 
 export default function Footer() {
@@ -10,16 +11,10 @@ export default function Footer() {
           {/* Brand Column */}
           <div className="footer-brand">
             <Link to="/" className="footer-logo">
-              <div className="logo-icon">
-                <BookOpen size={20} strokeWidth={2.5} />
-              </div>
-              <div className="logo-text">
-                <span className="logo-hindi" lang="hi">शिक्षासेतु</span>
-                <span className="logo-english">UPTET Saathi</span>
-              </div>
+              <BrandLogo tone="dark" size="md" showSubtitle subtitle="Your bridge to teaching" />
             </Link>
             <p className="footer-tagline" lang="hi">
-              सफलता की तैयारी, एक कदम आगे
+              अध्यापन की ओर आपका सेतु
             </p>
             <p className="footer-desc">
               The smartest way to prepare for UPTET — structured PYQs, 
@@ -55,7 +50,7 @@ export default function Footer() {
             <div className="footer-contact">
               <div className="contact-item">
                 <Mail size={16} />
-                <span>hello@shikshasetu.in</span>
+                <span>hello@examsetu.in</span>
               </div>
               <div className="contact-item">
                 <Phone size={16} />
@@ -71,7 +66,7 @@ export default function Footer() {
 
         {/* Bottom Bar */}
         <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} ShikshaSetu. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} ExamSetu. All rights reserved.</p>
           <p className="footer-made" lang="hi">
             Made with ❤️ in Kanpur 🇮🇳
           </p>

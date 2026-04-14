@@ -1,0 +1,344 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.page{padding:1.25rem 1rem;max-width:880px;font-family:var(--font-sans)}
+.sec-label{font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--color-text-tertiary);text-transform:uppercase;margin-bottom:8px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1.25rem}
+.mc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px}
+.mc-val{font-size:22px;font-weight:500;color:var(--color-text-primary);line-height:1}
+.mc-label{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+.mc-delta{font-size:11px;margin-top:5px}
+.up{color:var(--color-text-success)}.dn{color:var(--color-text-danger)}.ne{color:var(--color-text-tertiary)}
+.card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.1rem 1.25rem;margin-bottom:1.1rem}
+.ch{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.9rem}
+.ct{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+.cs{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:1.1rem}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1.1rem}
+.pbw{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pbl{font-size:13px;color:var(--color-text-primary);width:130px;flex-shrink:0}
+.pbt{flex:1;height:7px;background:var(--color-background-secondary);border-radius:99px;overflow:hidden}
+.pbf{height:100%;border-radius:99px}
+.pbp{font-size:12px;font-weight:500;width:34px;text-align:right;flex-shrink:0}
+.pbq{font-size:11px;color:var(--color-text-tertiary);width:32px;text-align:right;flex-shrink:0}
+.wt-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:.5px solid var(--color-border-tertiary)}
+.wt-row:last-child{border-bottom:none;padding-bottom:0}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.wt-name{font-size:13px;color:var(--color-text-primary)}
+.wt-meta{font-size:11px;color:var(--color-text-tertiary)}
+.wt-pct{font-size:13px;font-weight:500}
+.pbtn{font-size:11px;color:var(--color-text-info);cursor:pointer;padding:3px 8px;border:.5px solid var(--color-border-info);border-radius:var(--border-radius-md);background:none}
+.pbtn:hover{background:var(--color-background-info)}
+.ins-row{display:flex;gap:10px;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary);align-items:flex-start}
+.ins-row:last-child{border-bottom:none}
+.ins-ic{width:28px;height:28px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:500}
+.ins-txt{font-size:13px;color:var(--color-text-primary);line-height:1.5}
+.ins-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.sday{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--color-text-secondary);flex-shrink:0;border:.5px solid var(--color-border-tertiary)}
+.sday.done{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.sday.today{border:1.5px solid #1D9E75;color:var(--color-text-primary)}
+.es-row{display:flex;align-items:center;padding:7px 0;border-bottom:.5px solid var(--color-border-tertiary);gap:10px}
+.es-row:last-child{border-bottom:none}
+.es-name{font-size:13px;color:var(--color-text-primary)}
+.es-date{font-size:11px;color:var(--color-text-tertiary)}
+.es-track{flex:1;height:4px;background:var(--color-background-secondary);border-radius:99px;overflow:hidden}
+.es-fill{height:100%;border-radius:99px;background:#378ADD}
+.es-score{font-size:13px;font-weight:500;width:40px;text-align:right;flex-shrink:0}
+.badge{padding:4px 10px;border-radius:99px;font-size:11px;display:flex;align-items:center;gap:4px}
+.bdg-e{background:#EAF3DE;color:#3B6D11}
+.bdg-l{background:var(--color-background-secondary);color:var(--color-text-tertiary);border:.5px dashed var(--color-border-secondary)}
+.cutrow{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary)}
+.cutrow:last-child{border-bottom:none}
+.cutcat{color:var(--color-text-secondary)}
+.cutsafe{color:var(--color-text-success);font-size:11px}
+.cutdanger{color:var(--color-text-danger);font-size:11px}
+.cutwarn{color:var(--color-text-warning);font-size:11px}
+.hour-cell{width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--color-text-tertiary)}
+.rev-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:.5px solid var(--color-border-tertiary)}
+.rev-row:last-child{border-bottom:none}
+.rev-name{font-size:13px;color:var(--color-text-primary)}
+.rev-meta{font-size:11px;color:var(--color-text-tertiary)}
+.rev-due{font-size:11px;font-weight:500}
+.countdown-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;text-align:center}
+.cd-num{font-size:28px;font-weight:500;color:var(--color-text-primary);line-height:1}
+.cd-lbl{font-size:11px;color:var(--color-text-tertiary);margin-top:3px}
+.top-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:13px}
+.top-row:last-child{border-bottom:none}
+.top-rank{width:22px;text-align:center;font-size:11px;color:var(--color-text-tertiary)}
+.top-name{color:var(--color-text-primary);flex:1;margin:0 8px}
+.top-acc{font-weight:500}
+.you-row{background:var(--color-background-info);border-radius:4px}
+.daily-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.daily-lbl{font-size:12px;color:var(--color-text-secondary);flex:1}
+.daily-num{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.daily-sub{font-size:11px;color:var(--color-text-tertiary)}
+.prog-track{height:6px;background:var(--color-background-secondary);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.prog-fill{height:100%;border-radius:99px}
+.tag{font-size:10px;padding:2px 7px;border-radius:99px}
+</style>
+
+<div class="page">
+
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem">
+  <div>
+    <div style="font-size:22px;font-weight:500;color:var(--color-text-primary)">Analytics</div>
+    <div style="font-size:13px;color:var(--color-text-secondary);margin-top:2px">UPTET Paper 1 · आपकी तैयारी का पूरा विश्लेषण</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:11px;color:var(--color-text-tertiary)">Target exam</div>
+    <div style="font-size:13px;font-weight:500;color:var(--color-text-primary);margin-top:2px">UPTET 2024</div>
+  </div>
+</div>
+
+<div class="sec-label">At a glance</div>
+<div class="metric-grid">
+  <div class="mc"><div class="mc-val">446</div><div class="mc-label">Questions attempted</div><div class="mc-delta up">+38 this week</div></div>
+  <div class="mc"><div class="mc-val" style="color:#E24B4A">30%</div><div class="mc-label">Overall accuracy</div><div class="mc-delta up">+2% from last week</div></div>
+  <div class="mc"><div class="mc-val">27</div><div class="mc-label">Sessions done</div><div class="mc-delta ne">avg 16 Q/session</div></div>
+  <div class="mc"><div class="mc-val" style="color:#1D9E75">2</div><div class="mc-label">Day streak</div><div class="mc-delta ne">Best: 8 days</div></div>
+</div>
+
+<div class="two">
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">Exam countdown</div><div class="cs">Days remaining to UPTET 2024</div></div></div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px">
+      <div class="countdown-box"><div class="cd-num">187</div><div class="cd-lbl">days</div></div>
+      <div class="countdown-box"><div class="cd-num">26</div><div class="cd-lbl">weeks</div></div>
+      <div class="countdown-box"><div class="cd-num">6.2</div><div class="cd-lbl">months</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px">Daily target to reach 90/150</div>
+    <div class="prog-track"><div class="prog-fill" style="width:30%;background:#378ADD"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-tertiary)">
+      <span>Need 8 Q/day correctly answered</span><span>30% → 60% needed</span></div>
+  </div>
+
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">Predicted score today</div><div class="cs">Based on accuracy across all subjects</div></div></div>
+    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:12px">
+      <span style="font-size:32px;font-weight:500;color:var(--color-text-primary)">45</span>
+      <span style="font-size:16px;color:var(--color-text-secondary)">/ 150</span>
+      <span style="font-size:11px;color:var(--color-text-tertiary);margin-left:4px">range 38–52</span>
+    </div>
+    <div id="cutoffs"></div>
+  </div>
+</div>
+
+<div class="sec-label">Subject accuracy</div>
+<div class="card" style="margin-bottom:1.1rem">
+  <div id="subj-bars"></div>
+</div>
+
+<div class="two">
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">Weak topics</div><div class="cs">Sorted by impact on score</div></div></div>
+    <div id="weak-topics"></div>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">14-day accuracy trend</div><div class="cs">Daily correct %</div></div></div>
+    <div style="position:relative;width:100%;height:130px"><canvas id="trendChart" role="img" aria-label="14-day accuracy trend line chart">Accuracy varied from 0% to 55% over 14 days.</canvas></div>
+  </div>
+</div>
+<div style="margin-bottom:1.1rem"></div>
+
+<div class="sec-label">Time-of-day accuracy</div>
+<div class="card" style="margin-bottom:1.1rem">
+  <div class="ch"><div><div class="ct">When you perform best</div><div class="cs">Accuracy % by hour — darker = higher accuracy</div></div></div>
+  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="heatmap"></div>
+  <div style="display:flex;gap:16px;font-size:11px;color:var(--color-text-tertiary)">
+    <span>Peak: 9–11 AM (48%)</span>
+    <span>Worst: 10 PM+ (18%)</span>
+    <span>Tip: Shift evening sessions to morning</span>
+  </div>
+</div>
+
+<div class="sec-label">Spaced repetition — revision due</div>
+<div class="card" style="margin-bottom:1.1rem">
+  <div class="ch">
+    <div><div class="ct">Questions due for review</div><div class="cs">Forgetting curve — review before you forget</div></div>
+    <span style="font-size:11px;font-weight:500;color:#993C1D;background:#FAECE7;padding:3px 8px;border-radius:99px">14 due today</span>
+  </div>
+  <div id="rev-list"></div>
+</div>
+
+<div class="two">
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">Practice streak — April</div><div class="cs">Daily activity</div></div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px" id="streak-days"></div>
+    <div style="font-size:11px;color:var(--color-text-secondary)">Current: 2 &nbsp;·&nbsp; Best: 8 &nbsp;·&nbsp; Active: 10/12 days</div>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div><div class="ct">Mock test history</div><div class="cs">Score out of total</div></div></div>
+    <div id="mock-scores"></div>
+  </div>
+</div>
+<div style="margin-bottom:1.1rem"></div>
+
+<div class="sec-label">Topper comparison</div>
+<div class="card" style="margin-bottom:1.1rem">
+  <div class="ch"><div><div class="ct">Where you stand among users at your stage</div><div class="cs">Same exam · Same preparation week (week 6)</div></div></div>
+  <div id="leaderboard"></div>
+  <div style="margin-top:10px;font-size:11px;color:var(--color-text-tertiary)">Top 10% at your stage have 52% overall accuracy · You are in bottom 30%</div>
+</div>
+
+<div class="sec-label">Smart insights</div>
+<div class="card" style="margin-bottom:1.1rem">
+  <div id="insights"></div>
+</div>
+
+<div class="sec-label">Achievements</div>
+<div class="card" style="margin-bottom:0">
+  <div style="display:flex;flex-wrap:wrap;gap:8px" id="badges"></div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const subjs = [
+  {name:'बाल विकास (CDP)',pct:30,q:119},
+  {name:'भाषा I: हिंदी',pct:27,q:104},
+  {name:'भाषा II: अंग्रेज़ी',pct:30,q:63},
+  {name:'गणित',pct:23,q:91},
+  {name:'पर्यावरण अध्ययन',pct:39,q:74},
+];
+const sb = document.getElementById('subj-bars');
+subjs.forEach(s=>{
+  const c = s.pct>=60?'#1D9E75':s.pct>=40?'#BA7517':'#E24B4A';
+  sb.innerHTML+=`<div class="pbw"><div class="pbl">${s.name}</div><div class="pbt"><div class="pbf" style="width:${s.pct}%;background:${c}"></div></div><div class="pbp" style="color:${c}">${s.pct}%</div><div class="pbq">${s.q}Q</div></div>`;
+});
+
+const cuts=[{cat:'General',cut:90,gap:45},{cat:'OBC',cut:82,gap:37},{cat:'SC/ST',cut:65,gap:20}];
+const ce=document.getElementById('cutoffs');
+cuts.forEach(c=>{
+  const cls = c.gap<10?'cutsafe':c.gap<25?'cutwarn':'cutdanger';
+  const txt = c.gap<10?'safe':''+c.gap+' short';
+  ce.innerHTML+=`<div class="cutrow"><span class="cutcat">${c.cat}</span><span style="font-weight:500;font-size:13px">${c.cut}</span><span class="${cls}">${txt}</span></div>`;
+});
+
+const weakTopics=[
+  {name:'Divisibility Rules',sub:'गणित',pct:0,att:3},
+  {name:'Triangles',sub:'गणित',pct:0,att:3},
+  {name:'Vachya (Voice)',sub:'हिंदी',pct:14,att:7},
+  {name:'Reinforcement Theory',sub:'CDP',pct:17,att:6},
+  {name:'Passive Voice',sub:'English',pct:20,att:5},
+];
+const we=document.getElementById('weak-topics');
+weakTopics.forEach(t=>{
+  const c=t.pct===0?'#E24B4A':t.pct<30?'#BA7517':'#1D9E75';
+  we.innerHTML+=`<div class="wt-row"><div style="display:flex;align-items:center;gap:8px"><div class="dot" style="background:${c}"></div><div><div class="wt-name">${t.name}</div><div class="wt-meta">${t.sub} · ${t.att} attempts</div></div></div><div style="display:flex;align-items:center;gap:8px"><span class="wt-pct" style="color:${c}">${t.pct}%</span><button class="pbtn" onclick="sendPrompt('Give me 10 UPTET practice questions on ${t.name}')">Practice →</button></div></div>`;
+});
+
+const trendData=[12,0,55,50,47,48,0,45,0,42,0,48,50,50];
+const trendLabels=['30M','31M','1A','2A','3A','4A','5A','6A','7A','8A','9A','10A','11A','12A'];
+new Chart(document.getElementById('trendChart'),{
+  type:'line',
+  data:{
+    labels:trendLabels,
+    datasets:[{
+      data:trendData,fill:true,
+      backgroundColor:'rgba(55,138,221,0.1)',
+      borderColor:'#378ADD',borderWidth:1.5,
+      pointBackgroundColor:'#378ADD',pointRadius:3,pointHoverRadius:5,
+      tension:0.3
+    }]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${Math.round(ctx.parsed.y)}%`}}},
+    scales:{
+      x:{ticks:{font:{size:10},color:'#888780',autoSkip:true,maxTicksLimit:7},grid:{display:false}},
+      y:{min:0,max:100,ticks:{font:{size:10},color:'#888780',callback:v=>v+'%'},grid:{color:'rgba(136,135,128,0.15)'},
+        afterDrawChartArea:function(scale){
+          const ctx=scale.chart.ctx;
+          const y=scale.getPixelForValue(50);
+          ctx.save();ctx.strokeStyle='rgba(186,117,23,0.4)';ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);ctx.beginPath();
+          ctx.moveTo(scale.chart.chartArea.left,y);ctx.lineTo(scale.chart.chartArea.right,y);
+          ctx.stroke();ctx.restore();
+        }
+      }
+    }
+  }
+});
+
+const hourData=[
+  {h:'6AM',acc:30},{h:'7AM',acc:38},{h:'8AM',acc:42},{h:'9AM',acc:48},
+  {h:'10AM',acc:46},{h:'11AM',acc:44},{h:'12PM',acc:35},{h:'1PM',acc:28},
+  {h:'2PM',acc:25},{h:'3PM',acc:32},{h:'4PM',acc:36},{h:'5PM',acc:38},
+  {h:'6PM',acc:34},{h:'7PM',acc:30},{h:'8PM',acc:24},{h:'9PM',acc:20},
+  {h:'10PM',acc:18},{h:'11PM',acc:15}
+];
+const hm=document.getElementById('heatmap');
+hourData.forEach(h=>{
+  const intensity=Math.round((h.acc/55)*100);
+  const bg=`rgba(55,138,221,${(intensity/100)*0.7+0.05})`;
+  const tc=intensity>60?'#042C53':'var(--color-text-secondary)';
+  hm.innerHTML+=`<div class="hour-cell" style="background:${bg};color:${tc}" title="${h.h}: ${h.acc}%"><div>${h.h}</div><div style="font-weight:500">${h.acc}%</div></div>`;
+});
+
+const revItems=[
+  {name:'Passive Voice',sub:'English',due:'Overdue 2 days',urgency:'dn'},
+  {name:'Vachya',sub:'हिंदी',due:'Due today',urgency:'dn'},
+  {name:'HCF & LCM',sub:'गणित',due:'Due today',urgency:'ne'},
+  {name:'Multiple Intelligence',sub:'CDP',due:'Due tomorrow',urgency:'ne'},
+  {name:'Articles of Constitution',sub:'EVS',due:'Due in 2 days',urgency:'up'},
+];
+const re=document.getElementById('rev-list');
+revItems.forEach(r=>{
+  const c=r.urgency==='dn'?'#E24B4A':r.urgency==='ne'?'#BA7517':'#1D9E75';
+  re.innerHTML+=`<div class="rev-row"><div><div class="rev-name">${r.name}</div><div class="rev-meta">${r.sub}</div></div><div style="display:flex;align-items:center;gap:8px"><span class="rev-due" style="color:${c}">${r.due}</span><button class="pbtn" onclick="sendPrompt('Quick revision: 5 questions on ${r.name} for UPTET')">Review →</button></div></div>`;
+});
+
+const activeDays=[1,3,4,5,6,7,8,9,10,11];
+const se=document.getElementById('streak-days');
+for(let d=1;d<=12;d++){
+  const cls=d===12?'sday today':activeDays.includes(d)?'sday done':'sday';
+  se.innerHTML+=`<div class="${cls}">${d}</div>`;
+}
+
+const mocks=[
+  {name:'Full Mock #3',date:'Apr 10',score:52,max:150},
+  {name:'Full Mock #2',date:'Apr 5',score:47,max:150},
+  {name:'CDP Sectional',date:'Apr 2',score:19,max:30},
+  {name:'Full Mock #1',date:'Mar 28',score:41,max:150},
+];
+const me=document.getElementById('mock-scores');
+mocks.forEach(m=>{
+  const pct=Math.round((m.score/m.max)*100);
+  me.innerHTML+=`<div class="es-row"><div style="min-width:110px"><div class="es-name">${m.name}</div><div class="es-date">${m.date}</div></div><div class="es-track"><div class="es-fill" style="width:${pct}%"></div></div><div class="es-score">${m.score}/${m.max}</div></div>`;
+});
+
+const lb=[
+  {rank:1,name:'Priya Sharma',acc:68,you:false},
+  {rank:2,name:'Rahul Verma',acc:61,you:false},
+  {rank:3,name:'Anjali Singh',acc:57,you:false},
+  {rank:'—',name:'You (Amit)',acc:30,you:true},
+  {rank:null,name:'Avg. user (week 6)',acc:38,you:false},
+];
+const le=document.getElementById('leaderboard');
+lb.forEach(u=>{
+  const rowStyle=u.you?'top-row you-row':'top-row';
+  const tc=u.acc>=60?'#1D9E75':u.acc>=40?'#BA7517':'#E24B4A';
+  le.innerHTML+=`<div class="${rowStyle}" style="padding:7px 6px"><div class="top-rank">${u.rank||''}</div><div class="top-name">${u.name}${u.you?` <span class="tag" style="background:#E6F1FB;color:#185FA5">you</span>`:''}</div><span class="top-acc" style="color:${tc}">${u.acc}%</span></div>`;
+});
+
+const ins=[
+  {icon:'↑',bg:'#EAF3DE',tc:'#3B6D11',txt:'EVS is your strongest subject — push it from 39% to 60% for the highest score gain per hour of study',sub:'High-frequency topic: Environment & Ecosystems'},
+  {icon:'!',bg:'#FAECE7',tc:'#993C1D',txt:'Maths at 23% is your biggest drag. 15 more correct answers here = +10% overall score',sub:'Focus: Divisibility Rules, Triangles, Area'},
+  {icon:'◑',bg:'#E6F1FB',tc:'#185FA5',txt:'Your accuracy drops by 12% in sessions longer than 20 questions — try shorter, focused sessions',sub:'Recommended: max 15 Q for CDP practice'},
+  {icon:'→',bg:'#FAEEDA',tc:'#854F0B',txt:'You mostly practice mornings (good!) but skip evenings entirely — one 10-min evening review session would boost retention significantly',sub:'Spaced repetition works best with 2 gaps/day'},
+];
+const ie=document.getElementById('insights');
+ins.forEach(i=>{
+  ie.innerHTML+=`<div class="ins-row"><div class="ins-ic" style="background:${i.bg};color:${i.tc}">${i.icon}</div><div><div class="ins-txt">${i.txt}</div><div class="ins-sub">${i.sub}</div></div></div>`;
+});
+
+const bdgs=[
+  {l:'First session',e:true},{l:'7-day streak',e:true},{l:'100 questions',e:true},
+  {l:'50% accuracy',e:false},{l:'500 questions',e:false},{l:'Mock master',e:false},{l:'Topper zone',e:false},
+];
+const be=document.getElementById('badges');
+bdgs.forEach(b=>{
+  be.innerHTML+=`<span class="badge ${b.e?'bdg-e':'bdg-l'}">${b.e?'✓':'○'} ${b.l}</span>`;
+});
+</script>

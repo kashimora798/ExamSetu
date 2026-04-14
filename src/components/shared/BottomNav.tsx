@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, SlidersHorizontal, FileText,
-  BarChart3, Bookmark,
+  BarChart3, Bookmark, Trophy
 } from 'lucide-react';
 import './BottomNav.css';
 
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/mock-test', icon: FileText, label: 'Mocks' },
   { to: '/analytics', icon: BarChart3, label: 'Stats' },
   { to: '/bookmarks', icon: Bookmark, label: 'Saved' },
+  { to: '/leaderboard', icon: Trophy, label: 'Ranks' }
 ];
 
 export default function BottomNav() {

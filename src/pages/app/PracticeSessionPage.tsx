@@ -3,9 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useSubscription } from '../../hooks/useSubscription';
-import { ChevronLeft, Flag, LayoutGrid, ArrowRight, ArrowLeft, Coffee } from 'lucide-react';
+import { ChevronLeft, Flag, LayoutGrid, ArrowRight, ArrowLeft, Coffee, Users } from 'lucide-react';
 import { SubmitModal } from '../../components/app/practice/SubmitModal';
 import { MobileNavigatorSheet } from '../../components/app/practice/MobileNavigatorSheet';
+import { MathText } from '../../components/app/practice/MathText';
+import ReportQuestionModal from '../../components/shared/ReportQuestionModal';
+import { updateProgressRollups } from '../../lib/engine/progressPipeline';
+import { validateSessionSubmit, formatScoringValidationError } from '../../lib/engine/scoringValidation';
+import { validateSubscriptionForSession, isSessionTypeGated, formatSubscriptionError } from '../../lib/engine/subscriptionValidation';
+import { submitQuestionReport } from '../../lib/reporting';
+import { trackError, trackEvent } from '../../lib/telemetry';
+import SessionCompleteModal from '../../components/app/practice/SessionCompleteModal';
 
 type AttemptState = {
   id: string; question_id: string; question_order: number;
@@ -30,19 +38,28 @@ export default function PracticeSessionPage() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [lang, setLang] = useState<'hi' | 'en'>('hi');
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const touchStartX = useRef<number | null>(null);
   const questionStartTime = useRef<number>(Date.now());
   const elapsedRef = useRef<number>(0);
+  // Keep a ref so the timer interval can always read the current value
+  // (avoids stale-closure where timeRemaining stays null forever)
+  const timeRemainingRef = useRef<number | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => {
       elapsedRef.current += 1;
-      if (timeRemaining !== null) setTimeRemaining(p => p === null ? null : Math.max(0, p - 1));
+      if (timeRemainingRef.current !== null) {
+        const next = Math.max(0, timeRemainingRef.current - 1);
+        timeRemainingRef.current = next;
+        setTimeRemaining(next);
+      }
       if (elapsedRef.current === 2700) setShowFatigue(true);
     }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, []); // runs once — reads via ref, not stale state
 
   useEffect(() => { if (sessionId) loadData(); }, [sessionId]);
 
@@ -51,10 +68,10 @@ export default function PracticeSessionPage() {
       if (showSubmit || showNavigator) return;
       const curr = attempts[currentIndex];
       switch (e.key.toUpperCase()) {
-        case 'A': if (!curr?.selected_option) handleAnswer('A'); break;
-        case 'B': if (!curr?.selected_option) handleAnswer('B'); break;
-        case 'C': if (!curr?.selected_option) handleAnswer('C'); break;
-        case 'D': if (!curr?.selected_option) handleAnswer('D'); break;
+        case 'A': handleAnswer('A'); break;
+        case 'B': handleAnswer('B'); break;
+        case 'C': handleAnswer('C'); break;
+        case 'D': handleAnswer('D'); break;
         case 'ARROWRIGHT': case ' ': case 'ENTER': e.preventDefault(); nextQuestion(); break;
         case 'ARROWLEFT': e.preventDefault(); prevQuestion(); break;
         case 'F': toggleMark(); break;
@@ -71,28 +88,74 @@ export default function PracticeSessionPage() {
       const { data: s } = await supabase.from('practice_sessions').select('*').eq('id', sessionId!).single();
       if (!s) { navigate('/practice'); return; }
       setSession(s);
-      if (s.time_limit_secs) setTimeRemaining(s.time_limit_secs);
+
+            // Check if session is already completed
+            if (s.status === 'completed') {
+              setShowCompleteModal(true);
+              return;
+            }
+
+      void trackEvent('session_load', { session_id: sessionId, session_type: s.session_type }, user?.id);
+      if (s.session_type === 'pyq_paper') {
+        timeRemainingRef.current = null;
+        setTimeRemaining(null);
+      } else if (s.time_limit_secs) {
+        timeRemainingRef.current = s.time_limit_secs;
+        setTimeRemaining(s.time_limit_secs);
+      }
       const { data: a } = await supabase.from('question_attempts').select('*, questions(*)').eq('session_id', sessionId!).order('question_order', { ascending: true });
       if (a) {
-        setAttempts(a as AttemptState[]);
-        const first = a.findIndex((x: any) => !x.selected_option);
+        const subjectIds = [...new Set((a as any[]).map(x => x.questions?.subject_id).filter(Boolean))];
+        let subjectMap: Record<string, { name_en: string; name_hi: string; code: string }> = {};
+        if (subjectIds.length) {
+          const { data: subjects } = await supabase.from('subjects').select('id,name_en,name_hi,code').in('id', subjectIds);
+          subjectMap = Object.fromEntries((subjects || []).map((s: any) => [s.id, s]));
+        }
+
+        const enriched = (a as any[]).map((att) => {
+          const subject = att.questions?.subject_id ? subjectMap[att.questions.subject_id] : null;
+          return {
+            ...att,
+            questions: {
+              ...att.questions,
+              subject_name: subject?.name_hi || subject?.name_en || att.questions?.subject_code || '',
+            },
+          };
+        });
+
+        setAttempts(enriched as AttemptState[]);
+        const first = enriched.findIndex((x: any) => !x.selected_option);
         setCurrentIndex(first >= 0 ? first : 0);
       }
-    } catch { navigate('/practice'); }
+    } catch (error) {
+      void trackError(error, { stage: 'session_load', session_id: sessionId }, user?.id);
+      navigate('/practice');
+    }
     finally { setLoading(false); questionStartTime.current = Date.now(); }
   };
 
   const handleAnswer = useCallback(async (option: string) => {
-    if (!attempts[currentIndex] || attempts[currentIndex].selected_option) return;
     const attempt = attempts[currentIndex];
-    const isCorrect = option === attempt.questions?.correct_option;
+    if (!attempt) return;
+    // Lock the first choice for every session type.
+    if (attempt.selected_option) return;
+    const newOption = option;
+    const isCorrect = newOption ? newOption === attempt.questions?.correct_option : null;
     const timeTaken = Math.round((Date.now() - questionStartTime.current) / 1000);
     const updated = [...attempts];
-    updated[currentIndex] = { ...updated[currentIndex], selected_option: option, is_correct: isCorrect, time_taken_secs: timeTaken };
+    updated[currentIndex] = { ...updated[currentIndex], selected_option: newOption, is_correct: isCorrect, time_taken_secs: timeTaken };
     setAttempts(updated);
-    setShowExplanation(true);
-    supabase.from('question_attempts').update({ selected_option: option, is_correct: isCorrect, time_taken_secs: timeTaken, attempted_at: new Date().toISOString() }).eq('id', attempt.id).then(({ error }) => { if (error) console.error(error); });
-  }, [attempts, currentIndex]);
+    if (newOption) {
+      void trackEvent('session_answer', {
+        session_id: session?.id,
+        question_order: attempt.question_order,
+        is_correct: Boolean(isCorrect),
+        time_secs: timeTaken,
+      }, user?.id);
+    }
+    if (newOption) setShowExplanation(true); else setShowExplanation(false);
+    supabase.from('question_attempts').update({ selected_option: newOption, is_correct: isCorrect, time_taken_secs: timeTaken, attempted_at: new Date().toISOString() }).eq('id', attempt.id).then(({ error }) => { if (error) console.error(error); });
+  }, [attempts, currentIndex, session]);
 
   const toggleMark = useCallback(async () => {
     const attempt = attempts[currentIndex];
@@ -107,6 +170,19 @@ export default function PracticeSessionPage() {
     if (currentIndex < attempts.length - 1) { setCurrentIndex(i => i + 1); setShowExplanation(false); questionStartTime.current = Date.now(); }
   }, [currentIndex, attempts.length]);
 
+  const handleSubmitReport = async (reportType: any, reportText: string) => {
+    const attempt = attempts[currentIndex];
+    if (!attempt) return;
+    await submitQuestionReport({
+      userId: user!.id,
+      questionId: attempt.question_id,
+      sessionId: session?.id,
+      reportType,
+      reportText,
+      source: 'practice_session',
+    });
+  };
+
   const prevQuestion = useCallback(() => {
     if (currentIndex > 0) { setCurrentIndex(i => i - 1); setShowExplanation(false); questionStartTime.current = Date.now(); }
   }, [currentIndex]);
@@ -116,64 +192,85 @@ export default function PracticeSessionPage() {
     setIsSubmitting(true);
     try {
       const attempted = attempts.filter(a => a.selected_option).length;
-      const correct   = attempts.filter(a => a.is_correct).length;
+      const clientComputedScore = attempts.filter(a => a.is_correct).length;
+      void trackEvent('session_submit_attempt', { session_id: session.id, attempted, correct: clientComputedScore }, user.id);
 
-      // 1. Mark session complete
+      // Enforce Pro entitlement at submit-time for gated modes.
+      if (isSessionTypeGated(session.session_type)) {
+        const subscriptionResult = await validateSubscriptionForSession(user.id, session.session_type);
+        if (!subscriptionResult.allowed) {
+          const reason = formatSubscriptionError(subscriptionResult);
+          alert(`Access Restricted\n\n${reason}`);
+          void trackEvent('session_submit_blocked_subscription', {
+            session_id: session.id,
+            session_type: session.session_type,
+            subscription_status: subscriptionResult.subscription_status,
+          }, user.id);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // ── 1. SERVER-VALIDATED SCORING (Anti-Tamper Check) ──────────────────
+      // Before accepting the score, validate it on the server.
+      // This catches: score inflation, answer key tampering, replay attacks
+      const validationResult = await validateSessionSubmit(session.id, user.id);
+
+      // If server detected tampering, reject the submission
+      if (!validationResult.valid) {
+        const errorMsg = formatScoringValidationError(validationResult);
+        alert(`⚠️ Validation Failed\n\n${errorMsg}\n\nYour session has NOT been submitted. Please refresh and try again.`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Use server-validated score (in case corrections were needed)
+      const correctScore = validationResult.corrected_score;
+      const hasCorrections = validationResult.corrections > 0;
+
+      if (hasCorrections) {
+        console.warn(`[PracticeSessionPage] Score corrections applied: ${clientComputedScore} → ${correctScore}`);
+        void trackEvent('session_score_corrected', {
+          session_id: session.id,
+          client_score: clientComputedScore,
+          corrected_score: correctScore,
+          corrections: validationResult.corrections,
+        }, user.id);
+      }
+
+      // ── 2. MARK SESSION COMPLETE with server-validated score ──────────────
       await supabase.from('practice_sessions').update({
         status: 'completed', completed_at: new Date().toISOString(),
-        attempted, correct, wrong: attempted - correct,
-        skipped: attempts.length - attempted, score: correct,
+        attempted, correct: correctScore, wrong: attempted - correctScore,
+        skipped: attempts.length - attempted, score: correctScore,
         time_taken_secs: elapsedRef.current,
       }).eq('id', session.id);
 
-      // 2. Upsert user_topic_stats per topic answered in this session
-      const topicMap: Record<string, { attempts: number; correct: number }> = {};
-      for (const a of attempts) {
-        const topicId = a.questions?.topic_id;
-        if (!topicId || !a.selected_option) continue;
-        if (!topicMap[topicId]) topicMap[topicId] = { attempts: 0, correct: 0 };
-        topicMap[topicId].attempts += 1;
-        if (a.is_correct) topicMap[topicId].correct += 1;
-      }
-      for (const [topicId, stats] of Object.entries(topicMap)) {
-        await supabase.rpc('upsert_topic_stat', {
-          p_user_id: user.id, p_topic_id: topicId,
-          p_new_attempts: stats.attempts, p_new_correct: stats.correct,
-        });
-      }
+      // ── 3. UPDATE PROGRESS ROLLUPS ─────────────────────────────────────────
+      // Uses the shared pipeline that always writes chapter stats,
+      // so chapter progress advances even without mastery threshold.
+      await updateProgressRollups(user.id, attempts as any);
+      
+      void trackEvent('session_submit_success', {
+        session_id: session.id,
+        session_type: session.session_type,
+        attempted,
+        correct: correctScore,
+        score: correctScore,
+        score_validated: true,
+      }, user.id);
 
-      // 3. Upsert user_subject_stats
-      const subjectMap: Record<string, { attempts: number; correct: number }> = {};
-      for (const a of attempts) {
-        const subjectId = a.questions?.subject_id;
-        if (!subjectId || !a.selected_option) continue;
-        if (!subjectMap[subjectId]) subjectMap[subjectId] = { attempts: 0, correct: 0 };
-        subjectMap[subjectId].attempts += 1;
-        if (a.is_correct) subjectMap[subjectId].correct += 1;
-      }
-      for (const [subjectId, stats] of Object.entries(subjectMap)) {
-        const acc = stats.attempts > 0 ? Math.round((stats.correct / stats.attempts) * 100) : 0;
-        await supabase.from('user_subject_stats').upsert({
-          user_id: user.id, subject_id: subjectId,
-          attempts: stats.attempts, correct: stats.correct, accuracy_pct: acc,
-          last_updated: new Date().toISOString(),
-        }, { onConflict: 'user_id,subject_id', ignoreDuplicates: false });
-      }
-
-      // 4. Update user_profiles totals (re-count all attempts)
-      const { data: totals } = await supabase.from('question_attempts')
-        .select('id, is_correct')
-        .eq('user_id', user.id)
-        .not('selected_option', 'is', null);
-      if (totals) {
-        await supabase.from('user_profiles').update({
-          total_questions_attempted: totals.length,
-          total_correct: totals.filter((t: any) => t.is_correct).length,
-        }).eq('id', user.id);
-      }
-
-      navigate(`/results/${session.id}`);
-    } catch(e) { console.error(e); setIsSubmitting(false); }
+      // ── 4. NAVIGATE TO RESULTS ─────────────────────────────────────────────
+      const isExamSession = session.session_type === 'mock_test' || session.session_type === 'pyq_paper';
+      navigate(isExamSession ? `/mock-results/${session.id}` : `/results/${session.id}`);
+    } catch(e) {
+      console.error(e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      alert(`❌ Submission Failed\n\n${errorMsg}\n\nPlease check your connection and try again.`);
+      void trackEvent('session_submit_error', { session_id: session?.id, message: errorMsg }, user.id);
+      void trackError(e, { stage: 'session_submit', session_id: session?.id }, user.id);
+      setIsSubmitting(false);
+    }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
@@ -182,6 +279,11 @@ export default function PracticeSessionPage() {
     const diff = touchStartX.current - e.changedTouches[0].clientX;
     if (Math.abs(diff) > 50) { if (diff > 0 && attempts[currentIndex]?.selected_option) nextQuestion(); else if (diff < 0) prevQuestion(); }
     touchStartX.current = null;
+  };
+
+  const navigateToResults = () => {
+    const isExamSession = session?.session_type === 'mock_test' || session?.session_type === 'pyq_paper';
+    navigate(isExamSession ? `/mock-results/${sessionId}` : `/results/${sessionId}`);
   };
 
   if (loading) return (
@@ -193,6 +295,11 @@ export default function PracticeSessionPage() {
     </div>
   );
 
+  // Completed sessions are read-only; show modal and route to results.
+  if (showCompleteModal && session) {
+    return <SessionCompleteModal sessionId={sessionId!} onConfirm={navigateToResults} />;
+  }
+
   if (!session || attempts.length === 0) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
       <button onClick={() => navigate('/practice')} style={{ color: '#6366f1', fontWeight: 700, border: 'none', background: 'none', cursor: 'pointer', fontSize: '1rem' }}>← Practice पर वापस जाएं</button>
@@ -202,7 +309,9 @@ export default function PracticeSessionPage() {
   const curr = attempts[currentIndex];
   const q = curr?.questions;
   const isMockTest = session.session_type === 'mock_test';
-  const showFeedback = !isMockTest && !!curr?.selected_option;
+  const isPyqPaper = session.session_type === 'pyq_paper';
+  const isExamMode = isMockTest || isPyqPaper;
+  const showFeedback = !!curr?.selected_option;
   const questionText = lang === 'hi' && q?.question_hi ? q.question_hi : q?.question_en;
   const options = ['A', 'B', 'C', 'D'].map(k => ({ id: k, text: q?.options?.[k] || '' })).filter(o => o.text);
   const minutes = timeRemaining !== null ? Math.floor(timeRemaining / 60) : null;
@@ -266,12 +375,15 @@ export default function PracticeSessionPage() {
         <button onClick={toggleMark} style={{ padding: '8px 12px', border: '1px solid', borderColor: curr.is_marked ? '#f59e0b' : '#e5e7eb', background: curr.is_marked ? '#fffbeb' : '#f9fafb', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '0.78rem', color: curr.is_marked ? '#d97706' : '#6b7280' }}>
           <Flag size={15} fill={curr.is_marked ? '#d97706' : 'none'} /> {curr.is_marked ? 'Marked' : 'Mark'}
         </button>
-        {timeRemaining !== null && (
+        {!isPyqPaper && timeRemaining !== null && (
           <div style={{ padding: '8px 14px', borderRadius: '10px', background: isTimerDanger ? '#fef2f2' : isTimerWarning ? '#fffbeb' : '#f3f4f6', border: '1px solid', borderColor: isTimerDanger ? '#fecaca' : isTimerWarning ? '#fde68a' : '#e5e7eb', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '1rem', color: isTimerDanger ? '#dc2626' : isTimerWarning ? '#d97706' : '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </div>
         )}
-        <button onClick={() => setShowNavigator(true)} style={{ padding: '8px', background: '#f3f4f6', border: 'none', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#374151' }}>
+          <button onClick={() => setShowReport(true)} style={{ padding: '8px 10px', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#0f766e', fontWeight: 700, gap: '6px', fontSize: '0.74rem' }}>
+            <Flag size={16} /> Report
+          </button>
+          <button onClick={() => setShowNavigator(true)} style={{ padding: '8px', background: '#f3f4f6', border: 'none', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#374151' }}>
           <LayoutGrid size={20} />
         </button>
       </div>
@@ -294,8 +406,18 @@ export default function PracticeSessionPage() {
           {/* Question meta chips */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#9ca3af', fontFamily: 'monospace', letterSpacing: '0.1em' }}>Q {currentIndex + 1}</span>
+            {q?.subject_name && <span style={{ fontSize: '0.72rem', background: '#ecfeff', color: '#0f766e', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', border: '1px solid #a5f3fc' }}>{q.subject_name}</span>}
             {q?.source_year && <span style={{ fontSize: '0.72rem', background: '#eef2ff', color: '#6366f1', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', border: '1px solid #c7d2fe' }}>{q.source_year}</span>}
             {q?.difficulty && <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', border: '1px solid', background: q.difficulty === 'hard' ? '#fef2f2' : q.difficulty === 'medium' ? '#fffbeb' : '#f0fdf4', color: q.difficulty === 'hard' ? '#dc2626' : q.difficulty === 'medium' ? '#d97706' : '#16a34a', borderColor: q.difficulty === 'hard' ? '#fecaca' : q.difficulty === 'medium' ? '#fde68a' : '#bbf7d0' }}>{q.difficulty}</span>}
+            {showFeedback && (q?.accuracy_pct != null || (q?.attempt_count > 0 && q?.correct_count != null)) && (() => {
+              const acc = q.accuracy_pct != null ? Math.round(q.accuracy_pct) : Math.round((q.correct_count / q.attempt_count) * 100);
+              if (isNaN(acc)) return null;
+              return (
+                <span style={{ fontSize: '0.72rem', background: '#f8fafc', color: '#475569', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Users size={12} strokeWidth={3} /> {acc}% users got this right
+                </span>
+              );
+            })()}
             {/* Lang toggle */}
             {q?.question_hi && q?.question_en && (
               <div style={{ marginLeft: 'auto', display: 'flex', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
@@ -309,17 +431,39 @@ export default function PracticeSessionPage() {
           </div>
 
           {/* Question text */}
-          <p lang={lang} style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', lineHeight: 1.6, marginBottom: '24px', fontFamily: lang === 'hi' ? "'Noto Serif', serif" : 'inherit' }}>
-            {questionText}
+          <p lang={lang} style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', lineHeight: 1.6, marginBottom: questionText && q?.image_url ? '14px' : '24px', fontFamily: lang === 'hi' ? "'Noto Serif', serif" : 'inherit' }}>
+            <MathText text={questionText || ''} lang={lang} />
           </p>
+
+          {/* Question image (if any) */}
+          {q?.image_url && (
+            <div style={{ marginBottom: '24px', borderRadius: '14px', overflow: 'hidden', border: '1px solid #e5e7eb', background: '#f8fafc' }}>
+              <img
+                src={q.image_url}
+                alt="Question diagram"
+                style={{ width: '100%', maxHeight: '320px', objectFit: 'contain', display: 'block' }}
+                loading="lazy"
+              />
+            </div>
+          )}
 
           {/* Options */}
           {options.map(opt => (
-            <button key={opt.id} onClick={() => handleAnswer(opt.id)} style={getOptionStyle(opt.id) as React.CSSProperties}
+            <button
+              key={opt.id}
+              onClick={() => handleAnswer(opt.id)}
+              disabled={!!curr.selected_option}
+              style={getOptionStyle(opt.id) as React.CSSProperties}
               onMouseEnter={e => { if (!curr.selected_option) { (e.currentTarget as HTMLElement).style.borderColor = '#6366f1'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 4px #6366f110'; } }}
               onMouseLeave={e => { if (!curr.selected_option) { (e.currentTarget as HTMLElement).style.borderColor = '#e5e7eb'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; } }}>
               <span style={getOptionLabel(opt.id) as React.CSSProperties}>{opt.id}</span>
-              <span style={{ paddingTop: '4px', lineHeight: 1.6 }}>{opt.text}</span>
+              <span style={{ paddingTop: '4px', lineHeight: 1.6 }}>
+                {/* Check if this option has an image */}
+                {q?.option_images?.[opt.id] ? (
+                  <img src={q.option_images[opt.id]} alt={`Option ${opt.id}`} style={{ maxWidth: '100%', maxHeight: '120px', objectFit: 'contain', borderRadius: '8px', display: 'block', marginBottom: opt.text ? '8px' : 0 }} />
+                ) : null}
+                {opt.text && <MathText text={opt.text} lang={lang} />}
+              </span>
             </button>
           ))}
 
@@ -382,7 +526,14 @@ export default function PracticeSessionPage() {
       )}
 
       {showSubmit && <SubmitModal totalQuestions={attempts.length} attemptedCount={attempts.filter(a => a.selected_option).length} markedCount={attempts.filter(a => a.is_marked).length} onConfirm={handleSubmit} onCancel={() => setShowSubmit(false)} isLoading={isSubmitting} />}
-      {showNavigator && <MobileNavigatorSheet attempts={attempts} currentIndex={currentIndex} isMockTest={isMockTest} onNavigate={(idx) => { setCurrentIndex(idx); setShowExplanation(false); questionStartTime.current = Date.now(); }} onClose={() => setShowNavigator(false)} onSubmit={() => { setShowNavigator(false); setShowSubmit(true); }} />}
+      <ReportQuestionModal
+        open={showReport}
+        onClose={() => setShowReport(false)}
+        onSubmit={handleSubmitReport}
+        questionLabel={`Q ${currentIndex + 1}`}
+        source="practice_session"
+      />
+      {showNavigator && <MobileNavigatorSheet attempts={attempts} currentIndex={currentIndex} isMockTest={isExamMode} isPyqPaper={isPyqPaper} onNavigate={(idx) => { setCurrentIndex(idx); setShowExplanation(false); questionStartTime.current = Date.now(); }} onClose={() => setShowNavigator(false)} onSubmit={() => { setShowNavigator(false); setShowSubmit(true); }} />}
     </div>
   );
 }

@@ -5,6 +5,206 @@
   padding: var(--space-16) 0 var(--space-12);
 }
 
+.hero-launch-banner {
+  position: relative;
+  z-index: 2;
+  margin-bottom: var(--space-8);
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid #b8871866;
+  background:
+    radial-gradient(circle at 10% 0%, #f4efe4 0%, #f3ebdb 55%, #efe2c7 100%);
+  box-shadow: 0 16px 30px rgba(11, 24, 38, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.hero-launch-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hero-launch-live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0b1826;
+  margin-top: 7px;
+  box-shadow: 0 0 0 0 rgba(11, 24, 38, 0.5);
+  animation: heroPulse 1.6s ease-out infinite;
+}
+
+.hero-launch-title {
+  margin: 0;
+  color: #0b1826;
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.hero-launch-sub {
+  margin: 2px 0 0;
+  color: #4b5563;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.hero-launch-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.hero-seats-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #b8871855;
+  background: #fff7e8;
+}
+
+.hero-seats-count {
+  color: #0b1826;
+  font-size: 1.12rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hero-seats-label {
+  color: #6b7280;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.hero-countdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-time-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #0b1826;
+  color: #f4efe4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.hero-time-box span {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.hero-time-box small {
+  margin-top: 2px;
+  font-size: 0.58rem;
+  color: #d8c7a6;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.hero-launch-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #0b1826;
+  color: #f4efe4;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #0b1826;
+}
+
+.hero-launch-cta:hover {
+  background: #112539;
+}
+
+.hero-live-registration-toast {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4200;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #1f334855;
+  background: #0b1826;
+  box-shadow: 0 12px 24px rgba(11, 24, 38, 0.35);
+  animation: liveToastIn 0.24s ease-out;
+}
+
+.hero-live-toast-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.hero-live-toast-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d8c7a6;
+}
+
+.hero-live-toast-text {
+  margin: 3px 0 0;
+  font-size: 0.8rem;
+  color: #f4efe4;
+  line-height: 1.35;
+}
+
+@keyframes liveToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes heroPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(11, 24, 38, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(11, 24, 38, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(11, 24, 38, 0);
+  }
+}
+
 .hero-blob-1 {
   width: 500px;
   height: 500px;
@@ -231,6 +431,43 @@
 @media (max-width: 768px) {
   .hero {
     padding: var(--space-8) 0 var(--space-8);
+  }
+
+  .hero-launch-banner {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .hero-launch-right {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .hero-countdown {
+    order: 2;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hero-time-box {
+    flex: 1;
+    min-width: 0;
+    max-width: 64px;
+  }
+
+  .hero-live-registration-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+
+  .hero-launch-cta {
+    width: 100%;
+    order: 3;
   }
 
   .hero-container {

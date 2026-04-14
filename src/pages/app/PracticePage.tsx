@@ -1,66 +1,91 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
-import { Play, ChevronDown, ChevronUp, Flame, ArrowRight, Calendar, X, Pencil } from 'lucide-react';
+import { useSubscription } from '../../hooks/useSubscription';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Play, Flame, Calendar, Pencil, BookOpen,
+  AlertCircle, CheckCircle2, ChevronRight, X, Zap, Lock, Search, Trophy
+} from 'lucide-react';
 import { fetchQuestionsForSession } from '../../lib/engine/questionSelector';
+import { validateSubscriptionForSession, isSessionTypeGated, formatSubscriptionError } from '../../lib/engine/subscriptionValidation';
 
 /* ─── Color tokens ─────────────────────────────────────────────────── */
 const C = {
-  ink:'#1c1a14', ink2:'#3d3a2e', ink3:'#7a7560',
-  gold:'#c8860a', goldLight:'#fdf3e0', goldMid:'#f5c842',
-  teal:'#0f6b5e', tealLight:'#e0f2ef',
-  red:'#c0392b',  redLight:'#fdf0ee',
-  green:'#2d7a3a',greenLight:'#e8f5eb',
-  blue:'#1a4b8c', blueLight:'#e8eef8',
-  bg:'#faf9f5', surface:'#fff', border:'#e8e4d8', border2:'#f0ece2',
+  ink: '#1a1814', ink2: '#3a3628', ink3: '#8a8370',
+  gold: '#c8860a', goldLight: '#fdf6e3', goldMid: '#f5bc30', goldDeep: '#a06a05',
+  teal: '#0f6b5e', tealLight: '#e0f4f1', tealMid: '#1a8a7a',
+  red: '#c0392b', redLight: '#fdf0ee',
+  green: '#2d7a3a', greenLight: '#e8f5eb',
+  blue: '#1a4b8c', blueLight: '#e8eef8',
+  purple: '#6b3fa0', purpleLight: '#f3eeff',
+  bg: '#f7f5f0', surface: '#ffffff', border: '#e5e1d5', border2: '#ede9df',
+  shadow: '0 2px 12px rgba(28,26,20,0.08)',
 };
 
-/* ─── PYQ years with questions ────────────────────────────────────── */
-const PYQ_YEARS = [
-  { year: 2022, q: 150 }, { year: 2019, q: 150 }, { year: 2018, q: 150 },
-  { year: 2017, q: 150 }, { year: 2016, q: 150 }, { year: 2015, q: 150 },
-  { year: 2014, q: 150 }, { year: 2013, q: 120 }, { year: 2011, q: 138 },
-];
+/* ─── Types ─────────────────────────────────────────────────────────── */
+type ContentSource = 'pyq' | 'mock' | 'mixed';
+interface SubjectTab { id: string; code: string; name_en: string; name_hi: string; sort_order: number; is_optional: boolean; accuracy: number | null; attempted: number; }
+interface Chapter { id: string; name_en: string; name_hi: string; sort_order: number; topicCount: number; questionCount: number; attempted: number; correct: number; topicsDone: number; completionPct: number; accuracy: number; topics: TopicRow[]; }
+interface TopicRow { id: string; name_en: string; name_hi: string; sort_order: number; questionCount: number; attempted: number; accuracy: number | null; mastery: string; }
+interface WeakAlert { topicId: string; topicName: string; accuracy: number; chapterId?: string; }
 
-/* ─── Types ────────────────────────────────────────────────────────── */
-interface SubjectTab { id:string; code:string; name_en:string; name_hi:string; sort_order:number; is_optional:boolean; accuracy:number|null; attempted:number; }
-interface Chapter    { id:string; name_en:string; name_hi:string; sort_order:number; topicCount:number; questionCount:number; attempted:number; correct:number; topicsDone:number; topics:TopicRow[]; }
-interface TopicRow   { id:string; name_en:string; name_hi:string; sort_order:number; questionCount:number; attempted:number; accuracy:number|null; mastery:string|null; }
-interface TodayCard  { chapterName:string; topicName:string; topicId:string; chapterId:string; subjectCode:string; progressPct:number; questionsLeft:number; sessionId?:string; }
-interface WeakAlert  { topicId:string; topicName:string; accuracy:number; }
-
-/* ─── Exam date helpers ────────────────────────────────────────────── */
 function calcDays(dateStr: string | null | undefined): number {
   if (!dateStr) return Math.ceil((new Date('2026-12-01').getTime() - Date.now()) / 86400000);
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
 }
 
+/* ── Ring SVG ───────────────────────────────────────────────────────── */
+function Ring({ pct, size = 56, color, bg = '#e5e1d5', children }: {
+  pct: number; size?: number; color: string; bg?: string; children?: React.ReactNode;
+}) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={bg} strokeWidth={5} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={5}
+          strokeLinecap="round" strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - Math.min(pct, 100) / 100)}
+          style={{ transition: 'stroke-dashoffset .7s ease' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════ */
 export default function PracticePage() {
   const { user, profile } = useAuth();
+  const { isPro, isGrandfatheredFree } = useSubscription();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [allSubjects, setAllSubjects]   = useState<SubjectTab[]>([]);
+  const [allSubjects, setAllSubjects] = useState<SubjectTab[]>([]);
   const [activeSubjectId, setActiveSubjectId] = useState('');
-  const [chapters, setChapters]         = useState<Chapter[]>([]);
-  const [expandedChapter, setExpandedChapter] = useState<string|null>(null);
-  const [todayCard, setTodayCard]       = useState<TodayCard|null>(null);
-  const [weakAlert, setWeakAlert]       = useState<WeakAlert|null>(null);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [weakAlerts, setWeakAlerts] = useState<WeakAlert[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(false);
-  const [starting, setStarting]         = useState<string|null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [chapterFilter, setChapterFilter] = useState<'all' | 'weak' | 'unpracticed' | 'completed'>('all');
 
-  // PYQ modal
-  const [showPyq, setShowPyq]           = useState(false);
-  // Exam date editor
+  // Sheet state
+  const [sheetChapter, setSheetChapter] = useState<Chapter | null>(null);
+  const [sheetTopicExpanded, setSheetTopicExpanded] = useState(false);
+  const [sheetQCount, setSheetQCount] = useState(15);
+  const [sheetContentSource, setSheetContentSource] = useState<ContentSource>('mixed');
+  const [sheetTopicId, setSheetTopicId] = useState<string | null>(null);
+
+  // Exam date
   const [showDateEdit, setShowDateEdit] = useState(false);
-  const [dateInput, setDateInput]       = useState(profile?.target_exam_date || '2026-12-01');
-  const [examDays, setExamDays]         = useState(calcDays(profile?.target_exam_date));
+  const [dateInput, setDateInput] = useState(profile?.target_exam_date || '2026-12-01');
+  const [examDays, setExamDays] = useState(calcDays(profile?.target_exam_date));
 
   const subjectsOpted: string[] = (profile?.subjects_opted as string[]) || [];
 
-  /* ── Load subjects ── */
-  // Sync examDays when profile loads
   useEffect(() => {
     if (profile?.target_exam_date) {
       setDateInput(profile.target_exam_date);
@@ -70,588 +95,700 @@ export default function PracticePage() {
 
   useEffect(() => { if (user) loadSubjects(); }, [user, profile]);
   useEffect(() => { if (activeSubjectId) loadChapters(activeSubjectId); }, [activeSubjectId]);
-  useEffect(() => { if (user) { loadTodayCard(); loadWeakAlert(); } }, [user]);
+  useEffect(() => { if (user) loadWeakAlerts(); }, [user]);
+
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'weak_mix' && user) {
+      setStarting('weak_mix');
+      fetchQuestionsForSession('weak_mix', user.id, { limit: 20, contentSource: 'mixed' })
+        .then(qs => createAndNavigateSession('weak_mix', qs, {}))
+        .finally(() => setStarting(null));
+    }
+  }, [searchParams, user]);
+
+  // Topic Search Logic
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      const { data, error } = await supabase
+        .from('topics')
+        .select(`
+          id, name_en, name_hi, chapter_id,
+          chapters (name_en, name_hi, subjects (name_en, name_hi))
+        `)
+        .or(`name_en.ilike.%${searchQuery}%,name_hi.ilike.%${searchQuery}%`)
+        .limit(8);
+      
+      if (!error && data) setSearchResults(data);
+      setIsSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Topic Leaderboard State
+  const [topicLeaders, setTopicLeaders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!sheetTopicId) {
+      setTopicLeaders([]);
+      return;
+    }
+    const loadLeaders = async () => {
+      const { data } = await supabase.from('user_topic_stats')
+        .select(`user_id, accuracy_pct, attempts, user_profiles(full_name, avatar_url)`)
+        .eq('topic_id', sheetTopicId)
+        .gte('attempts', 1) // Require at least 1 attempt to qualify
+        .order('accuracy_pct', { ascending: false })
+        .order('attempts', { ascending: false })
+        .limit(3);
+      setTopicLeaders(data || []);
+    };
+    loadLeaders();
+  }, [sheetTopicId]);
 
   const loadSubjects = async () => {
-    const { data: subs } = await supabase.from('subjects')
-      .select('id,code,name_en,name_hi,sort_order,is_optional').order('sort_order');
+    const { data: subs } = await supabase.from('subjects').select('id,code,name_en,name_hi,sort_order,is_optional').order('sort_order');
     if (!subs) return;
-
-    const visible = subs.filter(s => {
-      if (!s.is_optional) return true;
-      return subjectsOpted.length ? subjectsOpted.includes(s.id) : s.code === 'English';
-    });
-
-    const { data: stats } = await supabase.from('user_subject_stats')
-      .select('subject_id,attempts,correct,accuracy_pct').eq('user_id', user!.id);
-    const sm: Record<string,any> = {};
-    (stats||[]).forEach(s => { sm[s.subject_id] = s; });
-
-    setAllSubjects(visible.map(s => ({
-      ...s,
-      accuracy: sm[s.id]?.accuracy_pct ?? null,
-      attempted: sm[s.id]?.attempts ?? 0,
-    })));
+    const visible = subs.filter(s => !s.is_optional || (subjectsOpted.length ? subjectsOpted.includes(s.id) : s.code === 'English'));
+    const { data: stats } = await supabase.from('user_subject_stats').select('subject_id,attempts,correct,accuracy_pct').eq('user_id', user!.id);
+    const sm: Record<string, any> = {};
+    (stats || []).forEach(s => { sm[s.subject_id] = s; });
+    setAllSubjects(visible.map(s => ({ ...s, accuracy: sm[s.id]?.accuracy_pct ?? null, attempted: sm[s.id]?.attempts ?? 0 })));
     if (visible.length) setActiveSubjectId(visible[0].id);
   };
 
   const loadChapters = async (subjectId: string) => {
     setLoadingChapters(true);
     try {
-      const { data: chs } = await supabase.from('chapters')
-        .select('id,name_en,name_hi,sort_order').eq('subject_id', subjectId).order('sort_order');
+      const { data: chs } = await supabase.from('chapters').select('id,name_en,name_hi,sort_order').eq('subject_id', subjectId).order('sort_order');
       if (!chs?.length) { setChapters([]); return; }
-
       const chIds = chs.map(c => c.id);
-      const { data: topics } = await supabase.from('topics')
-        .select('id,chapter_id,name_en,name_hi,sort_order').in('chapter_id', chIds).order('sort_order');
-      const { data: qs } = await supabase.from('questions')
-        .select('id,chapter_id,topic_id').in('chapter_id', chIds).eq('is_active', true);
-
-      const topicIds = (topics||[]).map(t => t.id);
-      let tsMap: Record<string,any> = {};
+      const [topicsRes, qsRes, chAggRes] = await Promise.all([
+        supabase.from('topics').select('id,chapter_id,name_en,name_hi,sort_order').in('chapter_id', chIds).order('sort_order'),
+        supabase.from('questions').select('id,chapter_id,topic_id').in('chapter_id', chIds).eq('is_active', true),
+        supabase.from('user_chapter_stats').select('chapter_id,attempts,correct,accuracy_pct,topics_completed,total_topics,completion_pct').eq('user_id', user!.id).in('chapter_id', chIds),
+      ]);
+      const topics = topicsRes.data || [];
+      const qs = qsRes.data || [];
+      const topicIds = topics.map(t => t.id);
+      let tsMap: Record<string, any> = {};
       if (topicIds.length) {
-        const { data: ts } = await supabase.from('user_topic_stats')
-          .select('topic_id,attempts,correct,accuracy_pct,mastery_level')
-          .eq('user_id', user!.id).in('topic_id', topicIds);
-        (ts||[]).forEach(s => { tsMap[s.topic_id] = s; });
+        const { data: ts } = await supabase.from('user_topic_stats').select('topic_id,attempts,correct,accuracy_pct,mastery_level').eq('user_id', user!.id).in('topic_id', topicIds);
+        (ts || []).forEach(s => { tsMap[s.topic_id] = s; });
       }
-
-      const qByChapter: Record<string,number> = {};
-      const qByTopic:   Record<string,number> = {};
-      (qs||[]).forEach(q => {
-        qByChapter[q.chapter_id] = (qByChapter[q.chapter_id]||0) + 1;
-        if (q.topic_id) qByTopic[q.topic_id] = (qByTopic[q.topic_id]||0) + 1;
+      const qByChapter: Record<string, number> = {};
+      const qByTopic: Record<string, number> = {};
+      qs.forEach(q => {
+        qByChapter[q.chapter_id] = (qByChapter[q.chapter_id] || 0) + 1;
+        if (q.topic_id) qByTopic[q.topic_id] = (qByTopic[q.topic_id] || 0) + 1;
       });
-
-      const topicsByChapter: Record<string,any[]> = {};
-      (topics||[]).forEach(t => { (topicsByChapter[t.chapter_id]??=[]).push(t); });
-
+      const chMap: Record<string, any> = {};
+      (chAggRes.data || []).forEach(row => { chMap[row.chapter_id] = row; });
+      const topicsByChapter: Record<string, any[]> = {};
+      topics.forEach(t => { (topicsByChapter[t.chapter_id] ??= []).push(t); });
       const built: Chapter[] = chs.map(ch => {
-        const chTopics: TopicRow[] = (topicsByChapter[ch.id]||[]).map(t => {
+        const chTopics: TopicRow[] = (topicsByChapter[ch.id] || []).map(t => {
           const ts = tsMap[t.id];
           const totalQ = qByTopic[t.id] || 0;
           const attempted = ts?.attempts || 0;
-          // Topic is "done" when attempts >= total questions (all seen) OR mastery is proficient/mastered
           const mastery = ts?.mastery_level || (attempted === 0 ? 'not_started' : 'learning');
-          return {
-            id: t.id, name_en: t.name_en, name_hi: t.name_hi || t.name_en,
-            sort_order: t.sort_order, questionCount: totalQ,
-            attempted, accuracy: ts?.accuracy_pct ?? null, mastery,
-          };
-        });
-
-        const topicsDone = chTopics.filter(t =>
-          t.mastery === 'proficient' || t.mastery === 'mastered' ||
-          (t.questionCount > 0 && t.attempted >= t.questionCount)
-        ).length;
-
-        const chAttempted = chTopics.reduce((s,t) => s + t.attempted, 0);
-        const chCorrect   = chTopics.reduce((s,t) => s + (t.accuracy != null ? Math.round((t.accuracy/100)*t.attempted) : 0), 0);
-
-        return {
-          id: ch.id, name_en: ch.name_en, name_hi: ch.name_hi || ch.name_en,
-          sort_order: ch.sort_order, topicCount: chTopics.length,
-          questionCount: qByChapter[ch.id] || 0,
-          attempted: chAttempted, correct: chCorrect, topicsDone, topics: chTopics,
-        };
-      });
-
+          return { id: t.id, name_en: t.name_en, name_hi: t.name_hi || t.name_en, sort_order: t.sort_order, questionCount: totalQ, attempted, accuracy: ts?.accuracy_pct ?? null, mastery };
+        }).filter(t => t.questionCount > 0);
+        const topicsDone = chTopics.filter(t => t.mastery === 'proficient' || t.mastery === 'mastered' || (t.questionCount > 0 && t.attempted >= t.questionCount)).length;
+        const dbStat = chMap[ch.id];
+        const chAttempted = dbStat?.attempts ?? chTopics.reduce((s, t) => s + t.attempted, 0);
+        const chCorrect = dbStat?.correct ?? chTopics.reduce((s, t) => s + (t.accuracy != null ? Math.round((t.accuracy / 100) * t.attempted) : 0), 0);
+        const chAccuracy = chAttempted > 0 ? Math.round((chCorrect / chAttempted) * 100) : 0;
+        const chCompletion = dbStat?.completion_pct != null ? Math.round(dbStat.completion_pct) : (chTopics.length > 0 ? Math.round((topicsDone / chTopics.length) * 100) : 0);
+        return { id: ch.id, name_en: ch.name_en, name_hi: ch.name_hi || ch.name_en, sort_order: ch.sort_order, topicCount: chTopics.length, questionCount: qByChapter[ch.id] || 0, attempted: chAttempted, correct: chCorrect, accuracy: chAccuracy, topicsDone, topics: chTopics, completionPct: chCompletion };
+      }).filter(ch => ch.topicCount > 0);
       setChapters(built);
-      const current = built.find(c => c.attempted > 0 && c.topicsDone < c.topicCount)
-                   || built.find(c => c.attempted === 0);
-      if (current) setExpandedChapter(current.id);
     } finally { setLoadingChapters(false); }
   };
 
-  const loadTodayCard = async () => {
-    const { data: session } = await supabase.from('practice_sessions')
-      .select('id,filters,status,session_type').eq('user_id', user!.id)
-      .eq('session_type','topic_practice').order('created_at',{ascending:false})
-      .limit(1).maybeSingle();
-    if (!session) return;
-    const topicId   = (session.filters as any)?.topicId   as string | undefined;
-    const chapterId = (session.filters as any)?.chapterId as string | undefined;
-    if (!topicId && !chapterId) return;
-
-    let chapterName = '', topicName = '', subjectCode = 'CDP', derivedChapterId = chapterId || '';
-
-    if (topicId) {
-      // topics -> chapter_id -> chapter -> subject
-      const { data: topic } = await supabase.from('topics')
-        .select('id,name_en,name_hi,chapter_id').eq('id', topicId).maybeSingle();
-      if (!topic) return;
-      topicName = (topic as any).name_en || (topic as any).name_hi;
-      derivedChapterId = (topic as any).chapter_id;
-
-      const { data: chapter } = await supabase.from('chapters')
-        .select('id,name_en,name_hi,subject_id').eq('id', derivedChapterId).maybeSingle();
-      chapterName = (chapter as any)?.name_hi || (chapter as any)?.name_en || '';
-
-      const { data: subject } = await supabase.from('subjects')
-        .select('code').eq('id', (chapter as any)?.subject_id).maybeSingle();
-      subjectCode = (subject as any)?.code || 'CDP';
-    } else if (chapterId) {
-      const { data: chapter } = await supabase.from('chapters')
-        .select('id,name_en,name_hi,subject_id').eq('id', chapterId).maybeSingle();
-      chapterName  = (chapter as any)?.name_hi || (chapter as any)?.name_en || '';
-      topicName    = chapterName;
-      const { data: subject } = await supabase.from('subjects')
-        .select('code').eq('id', (chapter as any)?.subject_id).maybeSingle();
-      subjectCode = (subject as any)?.code || 'CDP';
-    }
-
-    const { count: totalQ } = await supabase.from('questions')
-      .select('*',{count:'exact',head:true})
-      .eq(topicId ? 'topic_id' : 'chapter_id', topicId || chapterId!)
-      .eq('is_active', true);
-    const { data: topicStat } = topicId
-      ? await supabase.from('user_topic_stats').select('attempts').eq('user_id',user!.id).eq('topic_id',topicId).maybeSingle()
-      : { data: null };
-
-    const total = totalQ || 1;
-    const done  = Math.min((topicStat as any)?.attempts || 0, total);
-
-    setTodayCard({
-      chapterName, topicName, topicId: topicId || '',
-      chapterId: derivedChapterId, subjectCode,
-      progressPct: Math.round((done/total)*100),
-      questionsLeft: Math.max(0, total - done),
-      sessionId: session.status === 'in_progress' ? session.id : undefined,
-    });
-  };
-
-  const loadWeakAlert = async () => {
+  const loadWeakAlerts = async () => {
     const { data } = await supabase.from('user_topic_stats')
-      .select('topic_id,accuracy_pct,topics(name_en,name_hi)')
+      .select('topic_id,accuracy_pct,topics(name_en,name_hi,chapter_id)')
       .eq('user_id', user!.id).lt('accuracy_pct', 55).gte('attempts', 3)
-      .order('accuracy_pct',{ascending:true}).limit(1).maybeSingle();
-    if (data) {
-      const d = data as any;
-      setWeakAlert({ topicId: d.topic_id, accuracy: Math.round(d.accuracy_pct), topicName: d.topics?.name_en || d.topics?.name_hi || '' });
+      .order('accuracy_pct', { ascending: true }).limit(3);
+    if (data?.length) {
+      setWeakAlerts(data.map((d: any) => ({ topicId: d.topic_id, chapterId: d.topics?.chapter_id, accuracy: Math.round(d.accuracy_pct), topicName: d.topics?.name_en || d.topics?.name_hi || '' })));
     }
   };
 
-  /* ── Start session ─────────────────────────────────────────────────── */
+  const createAndNavigateSession = async (mode: string, questions: any[], extra: any) => {
+    if (!user || !questions.length) return;
+    const sessionType = mode === 'weak_mix' ? 'custom' : mode as any;
+    const filters = Object.fromEntries(Object.entries({ ...extra, practiceMode: mode }).filter(([, v]) => v !== '' && v !== null && v !== undefined));
+    const timeLimitSecs = mode === 'mock_test' ? 9000 : mode === 'pyq_paper' ? 9000 : mode === 'challenge' ? 600 : questions.length * 75;
+    const { data: session, error } = await supabase.from('practice_sessions').insert({
+      user_id: user.id, session_type: sessionType, filters,
+      total_questions: questions.length, time_limit_secs: timeLimitSecs,
+      status: 'in_progress', attempted: 0, correct: 0, wrong: 0, skipped: 0,
+    }).select().single();
+    if (error) throw error;
+    await supabase.from('question_attempts').insert(
+      questions.map((q, idx) => ({ session_id: session.id, user_id: user.id, question_id: q.id, question_order: idx + 1, is_skipped: false, is_marked: false }))
+    );
+    navigate(`/practice/${session.id}`);
+  };
+
   const startSession = async (mode: string, opts: any = {}) => {
     if (!user) return;
     const key = opts.topicId || opts.chapterId || mode;
     setStarting(key);
     try {
-      const questions = await fetchQuestionsForSession(mode as any, user.id, { limit: 150, ...opts });
-      if (!questions?.length) { alert('इस section में कोई प्रश्न उपलब्ध नहीं है।'); setStarting(null); return; }
-
-      const timeLimitSecs = mode === 'mock_test' ? 9000 : mode === 'challenge' ? 600 : mode === 'pyq_paper' ? 9000 : questions.length * 75;
-      const { data: session, error } = await supabase.from('practice_sessions').insert({
-        user_id: user.id, session_type: mode, filters: opts,
-        total_questions: questions.length, time_limit_secs: timeLimitSecs,
-        status: 'in_progress', attempted: 0, correct: 0, wrong: 0, skipped: 0,
-      }).select().single();
-      if (error) throw error;
-
-      await supabase.from('question_attempts').insert(
-        questions.map((q,idx) => ({ session_id: session.id, user_id: user.id, question_id: q.id, question_order: idx+1, is_skipped: false, is_marked: false }))
-      );
-      navigate(`/practice/${session.id}`);
-    } catch(e) { console.error(e); setStarting(null); }
+      if (isSessionTypeGated(mode) && !isPro && !isGrandfatheredFree) {
+        const access = await validateSubscriptionForSession(user.id, mode);
+        if (!access.allowed) {
+          alert(formatSubscriptionError(access));
+          return;
+        }
+      }
+      const cs: ContentSource = opts.contentSource || 'mixed';
+      const qs = await fetchQuestionsForSession(mode as any, user.id, { limit: opts.limit || 150, ...opts, contentSource: cs });
+      if (!qs?.length) { alert('इस section में कोई प्रश्न उपलब्ध नहीं है।'); return; }
+      await createAndNavigateSession(mode, qs, opts);
+    } catch (e) { console.error(e); } finally { setStarting(null); }
   };
 
-  /* ── Derived ───────────────────────────────────────────────────────── */
-  const activeSubject   = allSubjects.find(s => s.id === activeSubjectId);
-  const optionalSubs    = allSubjects.filter(s => s.is_optional);
+  const openSheet = (ch: Chapter) => {
+    setSheetChapter(ch);
+    setSheetTopicId(null);
+    setSheetTopicExpanded(false);
+    const defaultQ = Math.min(15, ch.questionCount || 15);
+    setSheetQCount(defaultQ);
+    setSheetContentSource('mixed');
+  };
+
+  const submitSheet = async () => {
+    if (!sheetChapter || !user) return;
+    const key = sheetTopicId || sheetChapter.id;
+    setStarting(key);
+    setSheetChapter(null);
+    try {
+      const maxQ = (sheetTopicId
+        ? sheetChapter.topics.find(t => t.id === sheetTopicId)?.questionCount
+        : sheetChapter.questionCount) || 50;
+      const clampedCount = Math.min(sheetQCount, maxQ);
+      const opts: any = { chapterId: sheetChapter.id, contentSource: sheetContentSource, limit: clampedCount };
+      if (sheetTopicId) opts.topicId = sheetTopicId;
+      const qs = await fetchQuestionsForSession('topic_practice', user.id, opts);
+      if (!qs?.length) { alert('इस section में कोई प्रश्न उपलब्ध नहीं है।'); return; }
+      await createAndNavigateSession('topic_practice', qs, opts);
+    } catch (e) { console.error(e); } finally { setStarting(null); }
+  };
+
+  /* ── Derived ── */
+  const activeSubject = allSubjects.find(s => s.id === activeSubjectId);
+  const optionalSubs = allSubjects.filter(s => s.is_optional);
   const isOptionalActive = !!allSubjects.find(s => s.is_optional && s.id === activeSubjectId);
   const getStatus = (ch: Chapter) => {
-    if (ch.attempted === 0) return 'not_started';
-    // Chapter is done when all topics with questions have been attempted
-    const topicsWithQ  = ch.topics.filter(t => t.questionCount > 0).length;
-    if (topicsWithQ > 0 && ch.topicsDone >= topicsWithQ) return 'done';
-    return 'in_progress';
+    if (ch.completionPct >= 100) return 'done';
+    if (ch.attempted > 0 || ch.completionPct > 0) return 'in_progress';
+    return 'not_started';
   };
-  const doneChapters     = chapters.filter(c => getStatus(c) === 'done');
-  const currentChapter   = chapters.find(c => getStatus(c) === 'in_progress');
-  const upcomingChapters = chapters.filter(c => getStatus(c) === 'not_started');
-  const totalQ           = chapters.reduce((s,c) => s + c.questionCount, 0);
-  const doneQ            = chapters.reduce((s,c) => s + c.attempted, 0);
+  const inProgressChapter = chapters.find(c => getStatus(c) === 'in_progress');
+  const nextChapter = chapters.find(c => getStatus(c) === 'not_started');
+  const globalAcc = profile?.total_questions_attempted
+    ? Math.round((profile.total_correct / profile.total_questions_attempted) * 100) : null;
+  const doneCount = chapters.filter(c => getStatus(c) === 'done').length;
 
-  // Global accuracy from profile
-  const globalAcc = profile && profile.total_questions_attempted > 0
-    ? Math.round((profile.total_correct / profile.total_questions_attempted) * 100)
-    : null;
-
-  /* ═══════════════════ RENDER ═══════════════════════════════════════ */
+  /* ─── Render ─── */
   return (
     <>
-    {/* ── PYQ Year Picker Modal ── */}
-    {showPyq && (
-      <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,.55)', display:'flex', alignItems:'flex-end', justifyContent:'center' }}
-        onClick={() => setShowPyq(false)}>
-        <div style={{ background:C.surface, borderRadius:'20px 20px 0 0', padding:'24px 20px 40px', width:'100%', maxWidth:'520px' }}
-          onClick={e => e.stopPropagation()}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'18px' }}>
-            <div>
-              <div style={{ fontWeight:800, fontSize:'1.05rem', color:C.ink }}>Previous Year Papers</div>
-              <div style={{ fontSize:'0.72rem', color:C.ink3 }}>साल चुनें — 150 प्रश्नों का Full Paper</div>
-            </div>
-            <button onClick={() => setShowPyq(false)} style={{ background:'none', border:'none', cursor:'pointer', color:C.ink3 }}><X size={20}/></button>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px' }}>
-            {PYQ_YEARS.map(({year, q}) => (
-              <button key={year}
-                onClick={() => { setShowPyq(false); startSession('pyq_paper', { sourceYear: year, limit: 200 }); }}
-                disabled={starting === `pyq_${year}`}
-                style={{ background: C.tealLight, border:`1.5px solid ${C.teal}33`, borderRadius:'12px', padding:'14px 10px', cursor:'pointer', fontFamily:'inherit', textAlign:'center' }}>
-                <div style={{ fontWeight:800, fontSize:'1.1rem', color:C.teal }}>{year}</div>
-                <div style={{ fontSize:'0.65rem', color:C.ink3, marginTop:'2px' }}>{q} प्रश्न</div>
+      {/* ────────────────────── SHEET OVERLAY ────────────────────────── */}
+      {sheetChapter && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setSheetChapter(null)}
+        >
+          <div
+            style={{ background: C.surface, borderRadius: '24px 24px 0 0', padding: '0 0 44px', width: '100%', maxWidth: '640px', boxShadow: '0 -8px 40px rgba(0,0,0,.2)', maxHeight: '90vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Sheet header */}
+            <div style={{ position: 'sticky', top: 0, background: C.surface, padding: '20px 20px 14px', borderBottom: `1px solid ${C.border2}`, display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              {/* Ring */}
+              <Ring pct={sheetChapter.completionPct}
+                size={64}
+                color={getStatus(sheetChapter) === 'done' ? C.green : getStatus(sheetChapter) === 'in_progress' ? C.gold : C.teal}
+              >
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, color: C.ink2 }}>{sheetChapter.completionPct}%</span>
+              </Ring>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: C.ink, lineHeight: 1.3 }}>{sheetChapter.name_hi}</div>
+                <div style={{ fontSize: '0.7rem', color: C.ink3, marginTop: '4px' }}>
+                  {sheetChapter.topicCount} topics · {sheetChapter.questionCount} प्रश्न उपलब्ध
+                  {sheetChapter.accuracy > 0 && ` · ${sheetChapter.accuracy}% accuracy`}
+                </div>
+              </div>
+              <button onClick={() => setSheetChapter(null)} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <X size={16} color={C.ink3} />
               </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* ── Exam Date Editor ── */}
-    {showDateEdit && (
-      <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}
-        onClick={() => setShowDateEdit(false)}>
-        <div style={{ background:C.surface, borderRadius:'16px', padding:'24px', width:'100%', maxWidth:'340px' }}
-          onClick={e => e.stopPropagation()}>
-          <div style={{ fontWeight:800, fontSize:'1rem', color:C.ink, marginBottom:'6px' }}>परीक्षा की तारीख बदलें</div>
-          <div style={{ fontSize:'0.75rem', color:C.ink3, marginBottom:'16px' }}>UPTET की अगली परीक्षा कब है?</div>
-          <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)}
-            style={{ width:'100%', padding:'10px 14px', border:`1.5px solid ${C.border}`, borderRadius:'10px', fontSize:'0.95rem', fontFamily:'inherit', boxSizing:'border-box', marginBottom:'14px' }} />
-          <button onClick={async () => {
-            setExamDays(calcDays(dateInput));
-            setShowDateEdit(false);
-            // Save to DB so it persists across devices/refreshes
-            if (user) {
-              await supabase.from('user_profiles')
-                .update({ target_exam_date: dateInput })
-                .eq('id', user.id);
-            }
-          }} style={{ width:'100%', background:C.teal, color:'white', border:'none', borderRadius:'10px', padding:'11px', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-            Save करें
-          </button>
-        </div>
-      </div>
-    )}
-
-    {/* ── MAIN LAYOUT (responsive) ── */}
-    <div style={{ maxWidth:'960px', margin:'0 auto', fontFamily:"'DM Sans',system-ui,sans-serif", background:C.bg, minHeight:'100vh', paddingBottom:'80px' }}>
-
-      {/* TOP BAR */}
-      <div style={{ background:C.ink, padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:50, borderRadius:'0 0 18px 18px', marginBottom:'16px' }}>
-        <div style={{ color:'white', fontWeight:700, fontSize:'1rem' }}>📚 अभ्यास करें</div>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          {(profile?.streak_days ?? 0) > 0 && (
-            <div style={{ background:C.gold, color:'white', fontSize:'0.72rem', fontWeight:700, padding:'3px 10px', borderRadius:'20px', display:'flex', alignItems:'center', gap:'4px' }}>
-              <Flame size={12}/> {profile!.streak_days}
             </div>
-          )}
-          <button onClick={() => setShowDateEdit(true)}
-            style={{ background:'rgba(255,255,255,.08)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'5px', color: examDays < 0 ? '#f87171' : '#fbbf24', fontSize:'0.72rem', fontWeight:700, padding:'4px 10px', borderRadius:'20px' }}>
-            <Calendar size={12}/>
-            {examDays < 0 ? `Exam ${Math.abs(examDays)} दिन पहले था` : `${examDays} दिन बाकी`}
-            <Pencil size={10}/>
-          </button>
-        </div>
-      </div>
 
-      {/* RESPONSIVE GRID: 1 col mobile, 2 col desktop */}
-      <div style={{ padding:'0 14px', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:'14px', alignItems:'start' }}>
-
-        {/* ── LEFT COLUMN ── */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-
-          {/* TODAY CARD */}
-          {todayCard && (
-            <div>
-              <div style={{ fontSize:'0.65rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:C.ink3, marginBottom:'6px' }}>⚡ आज का अभ्यास</div>
-              <div style={{ background:C.ink, borderRadius:'14px', padding:'16px', position:'relative', overflow:'hidden', cursor:'pointer' }}
-                onClick={() => todayCard.sessionId ? navigate(`/practice/${todayCard.sessionId}`) : startSession('topic_practice', { topicId: todayCard.topicId, chapterId: todayCard.chapterId })}>
-                <div style={{ position:'absolute', top:'-24px', right:'-24px', width:'100px', height:'100px', background:C.gold, opacity:0.12, borderRadius:'50%' }}/>
-                <div style={{ display:'inline-block', background:'rgba(200,134,10,.25)', color:C.goldMid, fontSize:'0.62rem', fontWeight:700, padding:'2px 8px', borderRadius:'4px', marginBottom:'8px' }}>
-                  {todayCard.subjectCode} · {todayCard.chapterName}
+            <div style={{ padding: '16px 20px' }}>
+              {/* Weak topic alert */}
+              {weakAlerts.filter(w => w.chapterId === sheetChapter.id).map(w => (
+                <div key={w.topicId} style={{ background: C.redLight, border: `1px solid ${C.red}25`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <AlertCircle size={15} color={C.red} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: C.red }}>{w.topicName}</div>
+                    <div style={{ fontSize: '0.65rem', color: C.ink3, marginTop: '1px' }}>{w.accuracy}% accuracy — practice करें</div>
+                  </div>
+                  <button onClick={() => setSheetTopicId(w.topicId)}
+                    style={{ background: C.red, color: 'white', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Focus
+                  </button>
                 </div>
-                <div style={{ color:'white', fontSize:'0.95rem', fontWeight:700, marginBottom:'4px' }}>{todayCard.topicName}</div>
-                <div style={{ color:'rgba(255,255,255,.5)', fontSize:'0.72rem', marginBottom:'10px' }}>
-                  {todayCard.progressPct > 0 ? `${todayCard.progressPct}% पूरा — ${todayCard.questionsLeft} बाकी` : `${todayCard.questionsLeft} प्रश्न`}
-                </div>
-                <div style={{ height:'3px', background:'rgba(255,255,255,.12)', borderRadius:'4px', marginBottom:'10px', overflow:'hidden' }}>
-                  <div style={{ height:'100%', width:`${todayCard.progressPct}%`, background:`linear-gradient(90deg,${C.gold},#f59e0b)`, borderRadius:'4px' }}/>
-                </div>
-                <button style={{ width:'100%', background:C.gold, color:'white', border:'none', borderRadius:'9px', padding:'10px 14px', fontWeight:700, fontSize:'0.88rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', fontFamily:'inherit' }}>
-                  {todayCard.sessionId ? 'जारी रखें' : 'शुरू करें'} — {todayCard.topicName.slice(0,24)}{todayCard.topicName.length > 24 ? '…':''}
-                  <ArrowRight size={15}/>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* QUICK STATS */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px' }}>
-            {[
-              { val: globalAcc != null ? `${globalAcc}%` : '—', lbl:'Accuracy' },
-              { val: profile?.total_questions_attempted || 0, lbl:'प्रश्न हल' },
-              { val: `${doneChapters.length}/${chapters.length}`, lbl:'अध्याय पूरे' },
-            ].map(s => (
-              <div key={s.lbl} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:'10px', padding:'10px', textAlign:'center' }}>
-                <div style={{ fontSize:'1.2rem', fontWeight:800, color:C.ink }}>{s.val}</div>
-                <div style={{ fontSize:'0.62rem', color:C.ink3, marginTop:'2px' }}>{s.lbl}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* QUICK START */}
-          <div>
-            <div style={{ fontSize:'0.65rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:C.ink3, marginBottom:'8px' }}>Quick Start</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'8px' }}>
-              {[
-                { id:'pyq', label:'Old Papers', emoji:'📄', accent:C.teal, bg:C.tealLight, action:() => setShowPyq(true) },
-                { id:'mock_test', label:'Mock Test', emoji:'⏱', accent:C.blue, bg:C.blueLight, action:() => startSession('mock_test') },
-                { id:'challenge', label:'Daily 10', emoji:'⚡', accent:'#7c3aed', bg:'#f5f3ff', action:() => startSession('challenge',{limit:10}) },
-                { id:'revision', label:'Revision', emoji:'📚', accent:C.green, bg:C.greenLight, action:() => startSession('revision') },
-              ].map(m => (
-                <button key={m.id} onClick={m.action} disabled={starting === m.id}
-                  style={{ background:m.bg, border:`1.5px solid ${m.accent}22`, borderRadius:'12px', padding:'10px 6px', cursor:'pointer', textAlign:'center', fontFamily:'inherit', opacity:starting === m.id ? 0.6 : 1, transition:'transform .1s' }}
-                  onMouseDown={e => (e.currentTarget.style.transform = 'scale(.95)')}
-                  onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}>
-                  <div style={{ fontSize:'1.3rem', marginBottom:'4px' }}>{m.emoji}</div>
-                  <div style={{ fontSize:'0.62rem', fontWeight:700, color:m.accent, lineHeight:1.3 }}>{m.label}</div>
-                </button>
               ))}
+
+              {/* Topic selector (collapsed by default) */}
+              <div style={{ marginBottom: '16px' }}>
+                <button onClick={() => setSheetTopicExpanded(p => !p)}
+                  style={{ width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: sheetTopicId ? C.teal : C.ink2 }}>
+                    {sheetTopicId ? `📌 ${sheetChapter.topics.find(t => t.id === sheetTopicId)?.name_hi || 'Topic selected'}` : '📚 Full Chapter practice'}
+                  </span>
+                  <ChevronRight size={15} color={C.ink3} style={{ transform: sheetTopicExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+                </button>
+
+                {sheetTopicExpanded && (
+                  <div style={{ marginTop: '6px', border: `1px solid ${C.border}`, borderRadius: '10px', overflow: 'hidden' }}>
+                    {/* "All chapter" option */}
+                    <div onClick={() => { setSheetTopicId(null); setSheetTopicExpanded(false); }}
+                      style={{ padding: '10px 14px', background: !sheetTopicId ? C.tealLight : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: `1px solid ${C.border2}` }}>
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: !sheetTopicId ? C.teal : C.border2, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <BookOpen size={10} color={!sheetTopicId ? 'white' : C.ink3} />
+                      </div>
+                      <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 600, color: !sheetTopicId ? C.teal : C.ink }}>पूरा Chapter</div>
+                      <span style={{ fontSize: '0.65rem', color: C.ink3 }}>{sheetChapter.questionCount}Q</span>
+                    </div>
+                    {sheetChapter.topics.map((t, idx) => {
+                      const isSel = sheetTopicId === t.id;
+                      const isDone = t.mastery === 'proficient' || t.mastery === 'mastered' || (t.questionCount > 0 && t.attempted >= t.questionCount);
+                      const isWeak = t.accuracy != null && t.accuracy < 55 && t.attempted >= 3;
+                      return (
+                        <div key={t.id} onClick={() => { setSheetTopicId(t.id); setSheetTopicExpanded(false); setSheetQCount(Math.min(t.questionCount, 15)); }}
+                          style={{ padding: '10px 14px', background: isSel ? C.tealLight : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderTop: `1px solid ${C.border2}` }}>
+                          <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: isDone ? C.green : isWeak ? C.red : isSel ? C.teal : C.border2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', fontWeight: 800, color: isDone || isWeak || isSel ? 'white' : C.ink3, flexShrink: 0 }}>
+                            {isDone ? '✓' : isWeak ? '!' : idx + 1}
+                          </div>
+                          <div style={{ flex: 1, fontSize: '0.8rem', color: isSel ? C.teal : C.ink, fontWeight: isSel ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name_hi}</div>
+                          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexShrink: 0 }}>
+                            {t.questionCount > 0 && <span style={{ fontSize: '0.6rem', color: C.ink3 }}>{t.questionCount}Q</span>}
+                            {t.accuracy != null && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '2px 6px', borderRadius: '8px', background: t.accuracy >= 70 ? C.greenLight : t.accuracy >= 50 ? C.goldLight : C.redLight, color: t.accuracy >= 70 ? C.green : t.accuracy >= 50 ? C.gold : C.red }}>{Math.round(t.accuracy)}%</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── TOPIC LEADERBOARD PREVIEW ── */}
+              {sheetTopicId && topicLeaders.length > 0 && (
+                <div style={{ marginBottom: '16px', background: C.goldLight, border: `1px solid ${C.gold}40`, borderRadius: '12px', padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', fontWeight: 800, fontSize: '0.78rem', color: C.goldDeep }}>
+                    <Trophy size={14} /> Topic Masters
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {topicLeaders.map((lb, idx) => {
+                      const isMe = lb.user_id === user?.id;
+                      return (
+                        <div key={lb.user_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: isMe ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.4)', padding: '6px 10px', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: idx === 0 ? C.goldDeep : C.ink3, width: '12px' }}>{idx + 1}.</span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: isMe ? 800 : 600, color: C.ink }}>
+                              {lb.user_profiles?.full_name || 'Anonymous'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: C.green }}>{Math.round(lb.accuracy_pct)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Content source */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+                {(['mixed', 'pyq', 'mock'] as ContentSource[]).map(cs => (
+                  <button key={cs} onClick={() => setSheetContentSource(cs)}
+                    style={{ flex: 1, padding: '8px', borderRadius: '8px', border: `1.5px solid`, borderColor: sheetContentSource === cs ? C.teal : C.border, background: sheetContentSource === cs ? C.tealLight : C.bg, color: sheetContentSource === cs ? C.teal : C.ink3, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {cs === 'mixed' ? '🔀 Mixed' : cs === 'pyq' ? '📄 PYQ' : '🏆 Mock'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Question count */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: C.ink3, textTransform: 'uppercase', letterSpacing: '.07em' }}>प्रश्नों की संख्या</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 800, color: C.teal }}>{sheetQCount}</span>
+                </div>
+                <input type="range"
+                  min={1}
+                  max={Math.max(1, sheetTopicId ? (sheetChapter.topics.find(t => t.id === sheetTopicId)?.questionCount || 15) : sheetChapter.questionCount)}
+                  value={sheetQCount}
+                  onChange={e => setSheetQCount(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: C.teal, cursor: 'pointer' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px', fontSize: '0.6rem', color: C.ink3 }}>
+                  <span>1</span>
+                  <span>{Math.max(1, sheetTopicId ? (sheetChapter.topics.find(t => t.id === sheetTopicId)?.questionCount || 15) : sheetChapter.questionCount)} उपलब्ध</span>
+                </div>
+              </div>
+
+              {/* Start button */}
+              <button onClick={submitSheet} disabled={!!starting}
+                style={{ width: '100%', background: `linear-gradient(135deg, ${C.teal} 0%, ${C.tealMid} 100%)`, color: 'white', border: 'none', borderRadius: '14px', padding: '16px', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: !!starting ? 0.7 : 1, boxShadow: `0 4px 20px ${C.teal}40` }}>
+                <Play size={18} fill="white" />
+                {starting ? 'शुरू हो रहा है...' : `${sheetQCount} प्रश्न शुरू करें`}
+              </button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* WEAK ALERT */}
-          {weakAlert && (
-            <button onClick={() => startSession('topic_practice',{topicId:weakAlert.topicId,limit:20})}
-              style={{ background:C.redLight, border:`1px solid #f5c6c2`, borderRadius:'10px', padding:'10px 14px', display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', textAlign:'left', width:'100%', fontFamily:'inherit' }}>
-              <span style={{ fontSize:'1.2rem' }}>⚠️</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:'0.78rem', fontWeight:700, color:C.red }}>कमज़ोर विषय मिला</div>
-                <div style={{ fontSize:'0.68rem', color:'#a93226', marginTop:'1px' }}>{weakAlert.topicName} — {weakAlert.accuracy}% accuracy</div>
-              </div>
-              <div style={{ background:C.red, color:'white', border:'none', borderRadius:'6px', padding:'5px 10px', fontSize:'0.7rem', fontWeight:700, whiteSpace:'nowrap', flexShrink:0 }}>
-                अभ्यास करें
-              </div>
+      {/* ── Exam Date Edit ── */}
+      {showDateEdit && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={() => setShowDateEdit(false)}>
+          <div style={{ background: C.surface, borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '340px', boxShadow: '0 -8px 40px rgba(0,0,0,.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: C.ink, marginBottom: '6px' }}>परीक्षा की तारीख बदलें</div>
+            <div style={{ fontSize: '0.75rem', color: C.ink3, marginBottom: '18px' }}>UPTET की अगली परीक्षा कब है?</div>
+            <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px', border: `1.5px solid ${C.border}`, borderRadius: '10px', fontSize: '0.95rem', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '14px' }} />
+            <button onClick={async () => {
+              setExamDays(calcDays(dateInput));
+              setShowDateEdit(false);
+              if (user) await supabase.from('user_profiles').update({ target_exam_date: dateInput }).eq('id', user.id);
+            }} style={{ width: '100%', background: C.teal, color: 'white', border: 'none', borderRadius: '10px', padding: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Save करें
             </button>
-          )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════ MAIN PAGE ════════════════════════════════ */}
+      <div style={{ maxWidth: '960px', margin: '0 auto', fontFamily: "'DM Sans',system-ui,sans-serif", background: C.bg, minHeight: '100vh', paddingBottom: '90px' }}>
+
+        {/* TOP BAR */}
+        <div style={{ background: C.ink, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50, borderRadius: '0 0 20px 20px', marginBottom: '0', boxShadow: '0 4px 20px rgba(0,0,0,.2)' }}>
+          <div style={{ color: 'white', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BookOpen size={18} color={C.goldMid} /> अभ्यास करें
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {(profile?.streak_days ?? 0) > 0 && (
+              <div style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.goldDeep})`, color: 'white', fontSize: '0.72rem', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Flame size={12} /> {profile!.streak_days}
+              </div>
+            )}
+            <button onClick={() => setShowDateEdit(true)}
+              style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: examDays < 30 ? '#f87171' : '#fbbf24', fontSize: '0.72rem', fontWeight: 700, padding: '5px 10px', borderRadius: '20px' }}>
+              <Calendar size={12} />
+              {examDays < 0 ? `Exam ${Math.abs(examDays)}d पहले` : `${examDays}d बाकी`}
+              <Pencil size={10} />
+            </button>
+          </div>
         </div>
 
-        {/* ── RIGHT COLUMN (subject tabs + chapters) ── */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+        <div style={{ padding: '16px 14px 0' }}>
 
-          {/* SUBJECT TABS */}
-          <div>
-            <div style={{ fontSize:'0.65rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'.08em', color:C.ink3, marginBottom:'8px' }}>विषय चुनें</div>
-            <div style={{ overflowX:'auto', scrollbarWidth:'none', paddingBottom:'4px' }}>
-              <div style={{ display:'flex', gap:'6px', width:'max-content' }}>
-                {allSubjects.map(s => {
-                  const active = s.id === activeSubjectId;
-                  const acc = s.accuracy != null ? Math.round(s.accuracy) : null;
-                  return (
-                    <button key={s.id} onClick={() => setActiveSubjectId(s.id)}
-                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 13px', borderRadius:'20px', whiteSpace:'nowrap',
-                        border:`1.5px solid ${active ? C.ink : C.border}`, background: active ? C.ink : C.surface,
-                        color: active ? 'white' : C.ink2, fontWeight:600, fontSize:'0.8rem', cursor:'pointer', fontFamily:'inherit', transition:'all .15s' }}>
-                      {s.name_hi || s.code}
-                      {acc != null && (
-                        <span style={{ fontSize:'0.6rem', fontWeight:700, padding:'1px 5px', borderRadius:'10px',
-                          background: active ? 'rgba(255,255,255,.2)' : C.greenLight, color: active ? 'rgba(255,255,255,.85)' : C.green }}>
-                          {acc}%
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* ── SEARCH BAR ── */}
+          <div style={{ position: 'relative', marginBottom: '16px', zIndex: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: '14px', padding: '12px 14px', boxShadow: C.shadow }}>
+              <Search size={18} color={C.ink3} style={{ flexShrink: 0 }} />
+              <input 
+                type="text" 
+                placeholder="Search topics (e.g. समास, Number System)..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', marginLeft: '10px', fontSize: '0.9rem', color: C.ink, fontFamily: 'inherit' }}
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}>
+                  <X size={16} color={C.ink3} />
+                </button>
+              )}
             </div>
-
-            {/* Language II picker */}
-            {isOptionalActive && optionalSubs.length > 1 && (
-              <div style={{ marginTop:'10px', background:C.goldLight, border:`1px solid #fde68a`, borderRadius:'10px', padding:'10px 14px' }}>
-                <div style={{ fontSize:'0.68rem', fontWeight:700, color:C.gold, marginBottom:'6px' }}>Language II — अपनी भाषा चुनें</div>
-                <div style={{ display:'flex', gap:'8px' }}>
-                  {optionalSubs.map(s => (
-                    <button key={s.id} onClick={async () => {
-                      await supabase.from('user_profiles').update({ subjects_opted:[s.id] }).eq('id', user!.id);
-                      setActiveSubjectId(s.id);
-                    }} style={{ padding:'6px 14px', borderRadius:'20px', border:`1.5px solid ${activeSubjectId === s.id ? C.gold : C.border}`,
-                      background: activeSubjectId === s.id ? C.gold : C.surface, color: activeSubjectId === s.id ? 'white' : C.ink2,
-                      fontWeight:700, fontSize:'0.78rem', cursor:'pointer', fontFamily:'inherit' }}>
-                      {s.code}
+            
+            {(searchQuery.trim() !== '') && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, boxShadow: '0 8px 30px rgba(0,0,0,0.12)', overflow: 'hidden', maxHeight: '300px', overflowY: 'auto' }}>
+                {isSearching ? (
+                  <div style={{ padding: '16px', textAlign: 'center', color: C.ink3, fontSize: '0.82rem', fontWeight: 600 }}>खोज रहे हैं...</div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map(res => (
+                    <button 
+                      key={res.id} 
+                      onClick={() => startSession('topic_practice', { topicId: res.id, limit: 15 })}
+                      style={{ width: '100%', textAlign: 'left', padding: '12px 16px', background: 'transparent', border: 'none', borderBottom: `1px solid ${C.border2}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: C.ink }}>
+                        {res.name_hi || res.name_en}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: C.ink3, marginTop: '2px', fontWeight: 500 }}>
+                        {res.chapters?.subjects?.name_hi || res.chapters?.subjects?.name_en} • {res.chapters?.name_hi || res.chapters?.name_en}
+                      </div>
                     </button>
-                  ))}
-                </div>
+                  ))
+                ) : (
+                  <div style={{ padding: '16px', textAlign: 'center', color: C.ink3, fontSize: '0.82rem', fontWeight: 600 }}>कोई topic नहीं मिला।</div>
+                )}
               </div>
             )}
           </div>
 
-          {/* SUBJECT PROGRESS RING */}
-          {activeSubject && !loadingChapters && chapters.length > 0 && (
-            <div style={{ background:`linear-gradient(135deg,${C.teal} 0%,#1a6b5e 100%)`, borderRadius:'13px', padding:'14px 16px', display:'flex', alignItems:'center', gap:'14px' }}>
-              <svg viewBox="0 0 48 48" style={{ width:'46px', height:'46px', flexShrink:0, transform:'rotate(-90deg)' }}>
-                <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="3"/>
-                <circle cx="24" cy="24" r="20" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"
-                  strokeDasharray="125.6" strokeDashoffset={125.6*(1-doneChapters.length/Math.max(chapters.length,1))}/>
-                <text x="24" y="24" dominantBaseline="middle" textAnchor="middle"
-                  style={{ fontSize:'8px', fontWeight:800, fill:'white', transform:'rotate(90deg)', transformOrigin:'24px 24px' }}>
-                  {Math.round((doneChapters.length/Math.max(chapters.length,1))*100)}%
-                </text>
-              </svg>
+          {/* ── DAILY ACTION CARD ── */}
+          <div style={{ background: `linear-gradient(135deg, ${C.ink} 0%, ${C.ink2} 100%)`, borderRadius: '20px', padding: '18px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 6px 24px rgba(0,0,0,.15)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `linear-gradient(135deg, ${C.purple}, ${C.gold})`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Zap size={22} color="white" fill="white" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: 'rgba(255,255,255,.6)', fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em' }}>आज का लक्ष्य</div>
+              <div style={{ color: 'white', fontWeight: 800, fontSize: '0.95rem', marginTop: '2px' }}>Daily Challenge — 10 प्रश्न</div>
+              <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '0.68rem', marginTop: '2px' }}>Mixed syllabus · 10 min</div>
+            </div>
+            <button onClick={() => startSession('challenge', { limit: 10 })} disabled={starting === 'challenge'}
+              style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.goldDeep})`, color: 'white', border: 'none', borderRadius: '12px', padding: '10px 16px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, opacity: starting === 'challenge' ? 0.7 : 1, boxShadow: `0 4px 14px ${C.gold}50` }}>
+              {starting === 'challenge' ? '⏳' : <><Play size={13} fill="white" /> Start</>}
+            </button>
+          </div>
+
+          {/* ── QUICK ACTIONS ROW ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '20px' }}>
+            <button onClick={() => startSession('revision')} disabled={!!starting}
+              style={{ background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: C.shadow }}>
+              <span style={{ fontSize: '1.2rem' }}>🔖</span>
               <div>
-                <div style={{ color:'white', fontWeight:700, fontSize:'0.88rem' }}>{activeSubject.name_hi}</div>
-                <div style={{ color:'rgba(255,255,255,.65)', fontSize:'0.7rem', marginTop:'3px' }}>
-                  {doneChapters.length} पूरे · {upcomingChapters.length} बाकी · {doneQ}/{totalQ} प्रश्न हल
-                </div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: C.ink }}>Revision</div>
+                <div style={{ fontSize: '0.62rem', color: C.ink3, marginTop: '1px' }}>Bookmarks + Wrong</div>
+              </div>
+            </button>
+            <button onClick={() => navigate('/mock-test')} disabled={!!starting}
+              style={{ background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: C.shadow }}>
+              <span style={{ fontSize: '1.2rem' }}>🏆</span>
+              <div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: C.ink }}>Mock Test</div>
+                <div style={{ fontSize: '0.62rem', color: C.ink3, marginTop: '1px' }}>150Q · Full exam</div>
+              </div>
+            </button>
+          </div>
+
+          {/* ── SUBJECT STRIP ── */}
+          <div style={{ overflowX: 'auto', scrollbarWidth: 'none', marginBottom: '16px', marginLeft: '-14px', marginRight: '-14px', padding: '0 14px' }}>
+            <div style={{ display: 'flex', gap: '8px', width: 'max-content' }}>
+              {allSubjects.map(s => {
+                const active = s.id === activeSubjectId;
+                const acc = s.accuracy != null ? Math.round(s.accuracy) : null;
+                return (
+                  <button key={s.id} onClick={() => setActiveSubjectId(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 16px', borderRadius: '20px', whiteSpace: 'nowrap', border: `1.5px solid ${active ? C.ink : C.border}`, background: active ? C.ink : C.surface, color: active ? 'white' : C.ink2, fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', boxShadow: active ? 'none' : C.shadow }}>
+                    {s.name_hi || s.code}
+                    {acc != null && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '1px 5px', borderRadius: '10px', background: active ? 'rgba(255,255,255,.2)' : C.greenLight, color: active ? 'rgba(255,255,255,.85)' : C.green }}>{acc}%</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Optional subject picker */}
+          {isOptionalActive && optionalSubs.length > 1 && (
+            <div style={{ marginBottom: '16px', background: C.goldLight, border: `1px solid #fde68a`, borderRadius: '10px', padding: '10px 14px' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: C.gold, marginBottom: '6px' }}>Language II — अपनी भाषा चुनें</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {optionalSubs.map(s => (
+                  <button key={s.id} onClick={async () => {
+                    await supabase.from('user_profiles').update({ subjects_opted: [s.id] }).eq('id', user!.id);
+                    setActiveSubjectId(s.id);
+                  }} style={{ padding: '6px 14px', borderRadius: '20px', border: `1.5px solid ${activeSubjectId === s.id ? C.gold : C.border}`, background: activeSubjectId === s.id ? C.gold : C.surface, color: activeSubjectId === s.id ? 'white' : C.ink2, fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {s.code}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* CHAPTER LIST */}
-          {loadingChapters && [1,2,3].map(i => (
-            <div key={i} style={{ height:'62px', background:'#eee', borderRadius:'14px', animation:'pulse 1.5s infinite' }}/>
-          ))}
+          {/* ── SUBJECT PROGRESS HEADER ── */}
+          {activeSubject && !loadingChapters && chapters.length > 0 && (
+            <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: C.ink }}>{activeSubject.name_hi}</div>
+                <div style={{ fontSize: '0.68rem', color: C.ink3, marginTop: '2px' }}>
+                  {doneCount}/{chapters.length} chapters पूरे
+                  {globalAcc != null && ` · ${globalAcc}% accuracy`}
+                </div>
+              </div>
+              {/* Mini progress bar */}
+              <div style={{ width: '80px' }}>
+                <div style={{ height: '6px', background: C.border2, borderRadius: '6px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.round((doneCount / Math.max(chapters.length, 1)) * 100)}%`, background: `linear-gradient(90deg, ${C.teal}, ${C.tealMid})`, borderRadius: '6px', transition: 'width .6s ease' }} />
+                </div>
+                <div style={{ fontSize: '0.6rem', color: C.ink3, marginTop: '3px', textAlign: 'right' }}>{Math.round((doneCount / Math.max(chapters.length, 1)) * 100)}%</div>
+              </div>
+            </div>
+          )}
+
+          {/* ── CHAPTER FILTERS ── */}
+          {!loadingChapters && chapters.length > 0 && (
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '14px', marginBottom: '4px', scrollbarWidth: 'none' }}>
+              {[
+                { id: 'all', label: 'All Chapters' },
+                { id: 'weak', label: 'Weak (<50%)' },
+                { id: 'unpracticed', label: 'Unpracticed' },
+                { id: 'completed', label: 'Completed' }
+              ].map(f => {
+                const isActive = chapterFilter === f.id;
+                return (
+                  <button key={f.id} onClick={() => setChapterFilter(f.id as any)}
+                    style={{ whiteSpace: 'nowrap', padding: '6px 14px', borderRadius: '20px', border: isActive ? `1.5px solid ${C.teal}` : `1.5px solid ${C.border}`, background: isActive ? C.tealLight : C.surface, color: isActive ? C.teal : C.ink3, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── LEARNING PATH ── */}
+          {loadingChapters && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{ height: '70px', background: C.border2, borderRadius: '16px', animation: 'pulse 1.5s infinite' }} />
+              ))}
+            </div>
+          )}
 
           {!loadingChapters && chapters.length > 0 && (
-            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-              {doneChapters.length > 0 && <>
-                <Divider label="✓ पूरे किये गये अध्याय"/>
-                {doneChapters.map(ch => <ChapterCard key={ch.id} ch={ch} status="done" expanded={expandedChapter===ch.id} onToggle={() => setExpandedChapter(expandedChapter===ch.id?null:ch.id)} onStart={startSession} starting={starting}/>)}
-              </>}
-
-              {currentChapter && <>
-                <Divider label="▶ अभी यहाँ हैं" pulse/>
-                <ChapterCard ch={currentChapter} status="in_progress" expanded={expandedChapter===currentChapter.id} onToggle={() => setExpandedChapter(expandedChapter===currentChapter.id?null:currentChapter.id)} onStart={startSession} starting={starting}/>
-              </>}
-
-              {upcomingChapters.length > 0 && <>
-                <Divider label="आगे के अध्याय"/>
-                {upcomingChapters.map(ch => <ChapterCard key={ch.id} ch={ch} status="not_started" expanded={expandedChapter===ch.id} onToggle={() => setExpandedChapter(expandedChapter===ch.id?null:ch.id)} onStart={startSession} starting={starting}/>)}
-              </>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {chapters.filter(ch => {
+                if (chapterFilter === 'completed') return ch.completionPct >= 100;
+                if (chapterFilter === 'unpracticed') return ch.attempted === 0;
+                if (chapterFilter === 'weak') return ch.attempted > 0 && ch.accuracy < 50;
+                return true;
+              }).map((ch, idx, arr) => {
+                const status = getStatus(ch);
+                // When filtering, we don't want the visual locked state to confuse users
+                const isLocked = chapterFilter === 'all' && status === 'not_started' && idx > 0 && getStatus(arr[idx - 1]) === 'not_started' && idx > (inProgressChapter ? arr.indexOf(inProgressChapter) + 3 : nextChapter ? arr.indexOf(nextChapter) + 2 : 2);
+                return (
+                  <ChapterNode
+                    key={ch.id}
+                    ch={ch}
+                    status={status}
+                    locked={isLocked}
+                    starting={starting}
+                    onTap={() => openSheet(ch)}
+                    onStart={() => { setSheetQCount(Math.min(15, ch.questionCount)); openSheet(ch); }}
+                  />
+                );
+              })}
             </div>
           )}
 
           {!loadingChapters && chapters.length === 0 && activeSubjectId && (
-            <div style={{ textAlign:'center', padding:'40px', color:C.ink3, fontSize:'0.875rem' }}>
+            <div style={{ textAlign: 'center', padding: '48px 20px', color: C.ink3, fontSize: '0.9rem', background: C.surface, borderRadius: '14px', border: `1px dashed ${C.border}` }}>
+              <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📭</div>
               इस विषय के लिए प्रश्न उपलब्ध नहीं हैं
             </div>
           )}
 
         </div>
       </div>
-    </div>
-    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} @keyframes ringPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.04)}}`}</style>
     </>
   );
 }
 
-/* ─── Sub-components ─────────────────────────────────────────────── */
-function Divider({ label, pulse }: { label: string; pulse?: boolean }) {
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'6px 0 2px' }}>
-      <div style={{ flex:1, height:'1px', background:C.border }}/>
-      <div style={{ fontSize:'0.6rem', fontWeight:700, color: pulse ? C.gold : C.ink3, textTransform:'uppercase', letterSpacing:'.06em', whiteSpace:'nowrap', animation: pulse ? 'pulse 2s infinite' : undefined }}>{label}</div>
-      <div style={{ flex:1, height:'1px', background:C.border }}/>
-    </div>
-  );
-}
-
-function ChapterCard({ ch, status, expanded, onToggle, onStart, starting }: {
-  ch: Chapter; status: 'done'|'in_progress'|'not_started';
-  expanded: boolean; onToggle: () => void;
-  onStart: (mode: string, opts: any) => void; starting: string|null;
+/* ─── Chapter Node (Duolingo-style) ──────────────────────────────── */
+function ChapterNode({ ch, status, locked, starting, onTap, onStart }: {
+  ch: Chapter;
+  status: 'done' | 'in_progress' | 'not_started';
+  locked: boolean;
+  starting: string | null;
+  onTap: () => void;
+  onStart: () => void;
 }) {
-  const progressPct = ch.topicCount > 0 ? Math.round((ch.topicsDone/ch.topicCount)*100) : 0;
-  const accuracy    = ch.attempted > 0 ? Math.round((ch.correct/ch.attempted)*100) : 0;
-
-  const numBg = status==='done' ? C.green : status==='in_progress' ? C.gold : C.border2;
-  const numColor = status==='done'||status==='in_progress' ? 'white' : C.ink3;
-  const barColor = status==='done' ? C.green : status==='in_progress' ? C.gold : C.blue;
-  const chipBg   = status==='done' ? C.greenLight : status==='in_progress' ? C.goldLight : C.blueLight;
-  const chipColor = status==='done' ? C.green : status==='in_progress' ? C.gold : C.blue;
+  const ringColor = status === 'done' ? C.green : status === 'in_progress' ? C.gold : locked ? '#ccc' : C.teal;
+  const ringBg = '#e5e1d5';
+  const cardBg = status === 'in_progress' ? C.goldLight : status === 'done' ? C.greenLight : C.surface;
+  const cardBorder = status === 'in_progress' ? `${C.gold}60` : status === 'done' ? `${C.green}40` : C.border;
+  const isStarting = starting === ch.id;
 
   return (
-    <div style={{ background:C.surface, border:`1px solid ${expanded||status==='in_progress' ? barColor : C.border}`, borderRadius:'13px', overflow:'hidden' }}>
-      <div onClick={onToggle} style={{ display:'flex', alignItems:'center', padding:'12px 14px', cursor:'pointer', gap:'10px' }}>
-        <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:numBg, color:numColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.72rem', fontWeight:800, flexShrink:0 }}>
-          {status==='done' ? '✓' : ch.sort_order}
+    <div
+      onClick={locked ? undefined : onTap}
+      style={{
+        background: cardBg, border: `1.5px solid ${cardBorder}`, borderRadius: '16px',
+        padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px',
+        cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.45 : 1,
+        boxShadow: status === 'in_progress' ? `0 4px 20px ${C.gold}20` : C.shadow,
+        transition: 'transform .12s, box-shadow .12s',
+      }}
+      onMouseEnter={e => { if (!locked) (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'none'; }}
+    >
+      {/* Ring */}
+      <Ring pct={ch.completionPct} size={52} color={ringColor} bg={ringBg}>
+        {status === 'done'
+          ? <CheckCircle2 size={16} color={C.green} fill={C.greenLight} />
+          : locked
+            ? <Lock size={13} color="#bbb" />
+            : <span style={{ fontSize: '0.68rem', fontWeight: 800, color: status === 'in_progress' ? C.gold : C.ink3 }}>{ch.sort_order}</span>
+        }
+      </Ring>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {ch.name_hi}
         </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontWeight:700, fontSize:'0.88rem', color:C.ink, lineHeight:1.3 }}>{ch.name_hi}</div>
-          <div style={{ fontSize:'0.66rem', color:C.ink3 }}>{ch.topicCount} topics · {ch.questionCount} Q</div>
+        <div style={{ fontSize: '0.65rem', color: C.ink3, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>{ch.topicCount} topics</span>
+          <span>·</span>
+          <span>{ch.questionCount} प्रश्न</span>
+          {ch.accuracy > 0 && (
+            <>
+              <span>·</span>
+              <span style={{ color: ch.accuracy >= 70 ? C.green : ch.accuracy >= 50 ? C.gold : C.red, fontWeight: 700 }}>{ch.accuracy}%</span>
+            </>
+          )}
         </div>
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'4px', flexShrink:0 }}>
-          <div style={{ fontSize:'0.62rem', fontWeight:700, padding:'2px 7px', borderRadius:'10px', background:chipBg, color:chipColor, whiteSpace:'nowrap' }}>
-            {status==='done' ? 'पूरा हुआ' : status==='in_progress' ? `${progressPct}% — जारी है` : `${ch.topicCount} topics`}
+        {/* Thin progress bar */}
+        {status !== 'not_started' && (
+          <div style={{ height: '3px', background: C.border2, borderRadius: '3px', overflow: 'hidden', marginTop: '7px', maxWidth: '140px' }}>
+            <div style={{ height: '100%', width: `${ch.completionPct}%`, background: `linear-gradient(90deg, ${ringColor}, ${ringColor}cc)`, borderRadius: '3px', transition: 'width .6s ease' }} />
           </div>
-          {expanded ? <ChevronUp size={13} color={C.ink3}/> : <ChevronDown size={13} color={C.ink3}/>}
-        </div>
+        )}
       </div>
 
-      {/* Progress bar */}
-      <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'0 14px 10px' }}>
-        <div style={{ flex:1, height:'3px', background:C.border2, borderRadius:'4px', overflow:'hidden' }}>
-          <div style={{ height:'100%', width:`${progressPct}%`, background:barColor, borderRadius:'4px', transition:'width .6s ease' }}/>
-        </div>
-        <div style={{ fontSize:'0.62rem', color:C.ink3, fontWeight:700, whiteSpace:'nowrap' }}>
-          {status==='done' ? `${accuracy}% accuracy` : `${ch.topicsDone}/${ch.topicCount} topics`}
-        </div>
-      </div>
-
-      {/* Topic list */}
-      {expanded && (
-        <div style={{ borderTop:`1px solid ${C.border2}`, paddingBottom:'8px' }}>
-          {/* Start full chapter button */}
-          <div style={{ padding:'10px 14px 6px' }}>
-            <button
-              onClick={() => onStart('topic_practice', { chapterId: ch.id, limit: 150 })}
-              disabled={starting === ch.id}
-              style={{ background: status==='in_progress' ? C.gold : C.ink, color:'white', border:'none', borderRadius:'8px', padding:'8px 16px', fontSize:'0.76rem', fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:'6px', opacity: starting===ch.id ? 0.7 : 1 }}>
-              <Play size={13} fill="white"/>
-              {status==='in_progress' ? `Chapter जारी रखें (${ch.questionCount} Q)` : `Chapter शुरू करें (${ch.questionCount} Q)`}
-            </button>
-          </div>
-
-          {ch.topics.map((t, idx) => {
-            const isDone    = t.mastery==='proficient'||t.mastery==='mastered'||(t.questionCount>0&&t.attempted>=t.questionCount);
-            const isCurrent = !isDone && t.attempted > 0;
-            const isWeak    = t.accuracy!=null && t.accuracy < 55 && t.attempted >= 3;
-            const dotBg     = isDone ? C.green : isCurrent ? C.gold : isWeak ? C.red : C.border2;
-            const dotColor  = isDone||isCurrent||(isWeak&&t.attempted>0) ? 'white' : C.ink3;
-            const rowBg     = isCurrent ? C.goldLight : 'transparent';
-
-            return (
-              <div key={t.id}
-                style={{ display:'flex', alignItems:'center', padding:'8px 14px 8px 24px', gap:'10px', cursor:'pointer', margin:'0 6px', borderRadius:'8px', background:rowBg }}
-                onMouseEnter={e => { if(!isCurrent)(e.currentTarget as HTMLElement).style.background=C.bg; }}
-                onMouseLeave={e => { if(!isCurrent)(e.currentTarget as HTMLElement).style.background=rowBg; }}>
-                <div style={{ width:'20px', height:'20px', borderRadius:'50%', background:dotBg, color:dotColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.6rem', fontWeight:800, flexShrink:0 }}>
-                  {isDone ? '✓' : isCurrent ? '▶' : isWeak ? '!' : idx+1}
-                </div>
-                <div style={{ flex:1, fontSize:'0.82rem', color:C.ink, fontWeight: isCurrent ? 700 : 500, lineHeight:1.35 }}>{t.name_en}</div>
-                <div style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0 }}>
-                  {t.questionCount > 0 && <span style={{ fontSize:'0.62rem', color:C.ink3 }}>{t.questionCount}Q</span>}
-                  {t.accuracy != null && (
-                    <span style={{ fontSize:'0.62rem', fontWeight:700, padding:'2px 5px', borderRadius:'8px',
-                      background: t.accuracy>=70 ? C.greenLight : t.accuracy>=50 ? C.goldLight : C.redLight,
-                      color:      t.accuracy>=70 ? C.green : t.accuracy>=50 ? C.gold : C.red }}>
-                      {Math.round(t.accuracy)}%
-                    </span>
-                  )}
-                  <button
-                    onClick={e => { e.stopPropagation(); onStart('topic_practice',{topicId:t.id,chapterId:ch.id,limit:50}); }}
-                    disabled={starting===t.id}
-                    style={{ background: isCurrent ? C.tealLight : C.goldLight, color: isCurrent ? C.teal : C.gold,
-                      border:'none', borderRadius:'6px', padding:'4px 9px', fontSize:'0.66rem', fontWeight:700,
-                      cursor:'pointer', whiteSpace:'nowrap', fontFamily:'inherit', opacity: starting===t.id ? 0.6 : 1 }}>
-                    {starting===t.id ? '...' : isCurrent ? 'जारी रखें' : 'शुरू करें'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* CTA */}
+      {!locked && (
+        <button
+          onClick={e => { e.stopPropagation(); onStart(); }}
+          disabled={!!isStarting}
+          style={{
+            background: status === 'in_progress' ? `linear-gradient(135deg, ${C.gold}, ${C.goldDeep})` : status === 'done' ? `linear-gradient(135deg, ${C.green}, #1a5c28)` : `linear-gradient(135deg, ${C.teal}, ${C.tealMid})`,
+            color: 'white', border: 'none', borderRadius: '10px', padding: '9px 13px',
+            fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, whiteSpace: 'nowrap',
+            boxShadow: `0 3px 12px ${status === 'in_progress' ? C.gold : C.teal}35`,
+            opacity: isStarting ? 0.7 : 1,
+            animation: status === 'in_progress' ? 'ringPulse 2.5s infinite' : 'none',
+          }}>
+          {isStarting ? '⏳' : status === 'done' ? '↩ Revise' : status === 'in_progress' ? <><Play size={12} fill="white" /> जारी</> : <><Play size={12} fill="white" /> शुरू</>}
+        </button>
       )}
     </div>
   );

@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 
 interface BookmarkedQ {
-  id: string;
   question_id: string;
   created_at: string;
   collection: string;
@@ -47,7 +46,7 @@ export default function BookmarksPage() {
       const { data } = await supabase
         .from('bookmarks')
         .select(`
-          id, question_id, created_at, collection,
+          question_id, created_at, collection,
           questions (
             id, question_hi, question_en, options, correct_option, difficulty,
             topics (name_hi, name_en, chapters (name_hi, name_en, subjects (name_hi, name_en)))
@@ -64,10 +63,10 @@ export default function BookmarksPage() {
     }
   };
 
-  const removeBookmark = async (bookmarkId: string, questionId: string) => {
-    setBookmarks(prev => prev.filter(b => b.id !== bookmarkId));
+  const removeBookmark = async (questionId: string) => {
+    setBookmarks(prev => prev.filter(b => b.question_id !== questionId));
     try {
-      await supabase.from('bookmarks').delete().eq('id', bookmarkId).eq('user_id', user!.id);
+      await supabase.from('bookmarks').delete().eq('question_id', questionId).eq('user_id', user!.id);
     } catch {
       // Reload on error
       loadBookmarks();
@@ -241,15 +240,15 @@ export default function BookmarksPage() {
           {filtered.map((bm, idx) => {
             const q = bm.questions;
             if (!q) return null;
-            const isOpen = expanded.has(bm.id);
+            const isOpen = expanded.has(bm.question_id);
             const subjectName = q.topics?.chapters?.subjects?.name_hi || q.topics?.chapters?.subjects?.name_en || '';
             const topicName = q.topics?.name_hi || q.topics?.name_en || '';
             const diff = (q.difficulty || 'medium') as string;
 
             return (
-              <div key={bm.id} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'box-shadow 0.2s' }}>
+              <div key={bm.question_id} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'box-shadow 0.2s' }}>
                 {/* Header row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '16px 18px', cursor: 'pointer' }} onClick={() => toggleExpand(bm.id)}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '16px 18px', cursor: 'pointer' }} onClick={() => toggleExpand(bm.question_id)}>
                   <div style={{ width: '28px', height: '28px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 800, color: '#6b7280' }}>
                     {idx + 1}
                   </div>
@@ -267,7 +266,7 @@ export default function BookmarksPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button onClick={e => { e.stopPropagation(); removeBookmark(bm.id, bm.question_id); }}
+                    <button onClick={e => { e.stopPropagation(); removeBookmark(bm.question_id); }}
                       title="Remove bookmark"
                       style={{ width: '32px', height: '32px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#dc2626', flexShrink: 0 }}>
                       <BookmarkX size={15} />

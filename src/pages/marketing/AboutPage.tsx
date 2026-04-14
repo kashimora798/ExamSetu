@@ -33,7 +33,7 @@ export default function AboutPage() {
         <div className="container">
           <h1 lang="hi">हमारे बारे में</h1>
           <p className="about-subtitle" lang="hi">
-            क्यों बनाया गया ShikshaSetu और कैसे यह आपकी UPTET तैयारी को 
+            क्यों बनाया गया ExamSetu और कैसे यह आपकी UPTET तैयारी को 
             बदल सकता है
           </p>
         </div>
@@ -50,7 +50,7 @@ export default function AboutPage() {
               structured question bank नहीं, कोई topic-wise analysis नहीं।
             </p>
             <p lang="hi">
-              ShikshaSetu इसी समस्या का समाधान है। हमने 10 साल के UPTET PYQ को digitize 
+              ExamSetu इसी समस्या का समाधान है। हमने 10 साल के UPTET PYQ को digitize 
               किया, topic-wise tag किया, difficulty level mark किया, और AI explanations 
               add किए — सब कुछ एक platform पर।
             </p>
